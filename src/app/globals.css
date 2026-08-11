@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+html, body {
+  background: #12191a;
+  color: #f3efe6;
+}
+
+.receipt {
+  background: #efe9d8;
+  color: #1c1a12;
+  position: relative;
+}
+.receipt::before, .receipt::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; height: 12px;
+  background: radial-gradient(circle at 10px 6px, transparent 6px, #12191a 6.5px) repeat-x;
+  background-size: 20px 12px;
+}
+.receipt::before { top: -6px; }
+.receipt::after { bottom: -6px; transform: rotate(180deg); }
