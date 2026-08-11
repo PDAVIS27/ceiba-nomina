@@ -1,0 +1,83 @@
+// Esquema de base de datos de Ceiba.
+// Motor: PostgreSQL (funciona directo con Vercel Postgres / Neon).
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PROVIDER_ADMIN // tú, como proveedor de la plataforma
+  COMPANY_OWNER  // el negocio cliente (RRHH / dueño)
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  companyId    String?
+  company      Company? @relation(fields: [companyId], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model Company {
+  id             String          @id @default(cuid())
+  name           String
+  // Usado para decidir la tasa de INSS patronal (21.5% / 22.5%).
+  status         String          @default("PILOTO") // PILOTO, ACTIVO, PAUSADO
+  createdAt      DateTime        @default(now())
+  users          User[]
+  employees      Employee[]
+  periods        PayrollPeriod[]
+  supportCases   SupportCase[]
+}
+
+model Employee {
+  id           String     @id @default(cuid())
+  companyId    String
+  company      Company    @relation(fields: [companyId], references: [id])
+  fullName     String
+  role         String
+  grossSalary  Decimal    @db.Decimal(12, 2)
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  payslips     Payslip[]
+}
+
+model PayrollPeriod {
+  id         String     @id @default(cuid())
+  companyId  String
+  company    Company    @relation(fields: [companyId], references: [id])
+  label      String
+  createdAt  DateTime   @default(now())
+  payslips   Payslip[]
+}
+
+model Payslip {
+  id             String        @id @default(cuid())
+  periodId       String
+  period         PayrollPeriod @relation(fields: [periodId], references: [id])
+  employeeId     String
+  employee       Employee      @relation(fields: [employeeId], references: [id])
+  grossSalary    Decimal       @db.Decimal(12, 2)
+  inssLaboral    Decimal       @db.Decimal(12, 2)
+  irMensual      Decimal       @db.Decimal(12, 2)
+  netPay         Decimal       @db.Decimal(12, 2)
+  createdAt      DateTime      @default(now())
+}
+
+// Casos que la plataforma marca para que el proveedor (tú) intervenga a mano:
+// salario variable, aguinaldo que excede el tramo exento, doble empleador, etc.
+model SupportCase {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  title     String
+  detail    String
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
