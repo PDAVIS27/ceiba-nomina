@@ -43,6 +43,7 @@ model Employee {
   fullName     String
   role         String
   grossSalary  Decimal    @db.Decimal(12, 2)
+  startDate    DateTime   @default(now())
   active       Boolean    @default(true)
   createdAt    DateTime   @default(now())
   payslips     Payslip[]
@@ -64,6 +65,13 @@ model Payslip {
   employeeId     String
   employee       Employee      @relation(fields: [employeeId], references: [id])
   grossSalary    Decimal       @db.Decimal(12, 2)
+  horasExtraCantidad     Decimal @default(0) @db.Decimal(6, 2)
+  horasExtraMonto        Decimal @default(0) @db.Decimal(12, 2)
+  comisiones             Decimal @default(0) @db.Decimal(12, 2)
+  viaticos               Decimal @default(0) @db.Decimal(12, 2)
+  provisionAguinaldo     Decimal @default(0) @db.Decimal(12, 2)
+  provisionVacaciones    Decimal @default(0) @db.Decimal(12, 2)
+  provisionIndemnizacion Decimal @default(0) @db.Decimal(12, 2)
   inssLaboral    Decimal       @db.Decimal(12, 2)
   irMensual      Decimal       @db.Decimal(12, 2)
   netPay         Decimal       @db.Decimal(12, 2)
