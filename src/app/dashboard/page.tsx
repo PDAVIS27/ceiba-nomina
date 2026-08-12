@@ -83,7 +83,11 @@ async function runPayroll(formData: FormData) {
   });
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { periodo?: string };
+}) {
   const session = await getServerSession(authOptions);
   const companyId = (session?.user as any)?.companyId;
   if (!companyId) redirect("/login");
@@ -93,11 +97,14 @@ export default async function DashboardPage() {
     where: { companyId, active: true },
     orderBy: { createdAt: "asc" },
   });
-  const lastPeriod = await prisma.payrollPeriod.findFirst({
+  const periods = await prisma.payrollPeriod.findMany({
     where: { companyId },
     orderBy: { createdAt: "desc" },
-    include: { payslips: { include: { employee: true } } },
+    include: { payslips: { include: { employee: true }, orderBy: { createdAt: "asc" } } },
   });
+  const selectedPeriod = searchParams.periodo
+    ? periods.find((p) => p.id === searchParams.periodo) ?? periods[0]
+    : periods[0];
 
   const hoy = new Date();
   const totalBruto = employees.reduce((a, e) => a + Number(e.grossSalary), 0);
@@ -228,14 +235,83 @@ export default async function DashboardPage() {
             Correr planilla ahora
           </SubmitButton>
         </form>
-        {lastPeriod && (
-          <div className="text-xs text-inkfaint mt-4">
-            Último período generado: <span className="text-ink">{lastPeriod.label}</span> ·{" "}
-            {lastPeriod.payslips.length} comprobantes creados.
-          </div>
-        )}
       </section>
+
+      {periods.length > 0 && selectedPeriod && (
+        <section className="bg-panel border border-line rounded-xl p-6 mt-6">
+          <div className="flex justify-between items-center flex-wrap gap-3 mb-4">
+            <h3 className="font-serif text-lg font-semibold">Comprobantes generados</h3>
+            {periods.length > 1 && (
+              <div className="flex gap-2 flex-wrap">
+                {periods.map((p) => (
+                  <a
+                    key={p.id}
+                    href={`/dashboard?periodo=${p.id}`}
+                    className={`px-3 py-1.5 rounded-full text-xs font-mono border ${
+                      p.id === selectedPeriod.id
+                        ? "bg-gold text-[#1b1500] border-gold"
+                        : "border-linestrong text-inkdim"
+                    }`}
+                  >
+                    {p.label}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="text-xs text-inkfaint font-mono mb-3">
+            {selectedPeriod.label} · {selectedPeriod.payslips.length} comprobantes
+          </div>
+
+          <div className="space-y-3">
+            {selectedPeriod.payslips.map((ps) => {
+              const provisiones =
+                Number(ps.provisionAguinaldo) + Number(ps.provisionVacaciones) + Number(ps.provisionIndemnizacion);
+              return (
+                <details key={ps.id} className="border border-line rounded-lg px-4 py-3 group">
+                  <summary className="flex justify-between items-center cursor-pointer list-none">
+                    <div>
+                      <div className="font-medium">{ps.employee.fullName}</div>
+                      <div className="text-xs text-inkfaint">{ps.employee.role}</div>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="text-[10px] uppercase text-inkfaint font-mono">Neto</div>
+                        <div className="font-mono">{money(Number(ps.netPay))}</div>
+                      </div>
+                      <span className="text-inkfaint text-xs group-open:rotate-180 transition-transform">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4 pt-4 border-t border-line grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
+                    <Detalle label="Salario bruto" value={money(Number(ps.grossSalary))} />
+                    <Detalle label="Horas extra" value={`${Number(ps.horasExtraCantidad)} h · ${money(Number(ps.horasExtraMonto))}`} />
+                    <Detalle label="Comisiones" value={money(Number(ps.comisiones))} />
+                    <Detalle label="Viáticos (no gravable)" value={money(Number(ps.viaticos))} />
+                    <Detalle label="INSS laboral (7%)" value={"− " + money(Number(ps.inssLaboral))} />
+                    <Detalle label="IR retenido" value={"− " + money(Number(ps.irMensual))} />
+                    <Detalle label="Neto a pagar" value={money(Number(ps.netPay))} bold />
+                    <Detalle label="Provisión aguinaldo" value={money(Number(ps.provisionAguinaldo))} />
+                    <Detalle label="Provisión vacaciones" value={money(Number(ps.provisionVacaciones))} />
+                    <Detalle label="Provisión indemnización" value={money(Number(ps.provisionIndemnizacion))} />
+                    <Detalle label="Total provisiones del mes" value={money(provisiones)} bold />
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </main>
+  );
+}
+
+function Detalle({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className="flex justify-between md:block">
+      <div className="text-inkfaint text-[11px] uppercase font-mono">{label}</div>
+      <div className={`font-mono ${bold ? "font-semibold text-ink" : "text-inkdim"}`}>{value}</div>
+    </div>
   );
 }
 
