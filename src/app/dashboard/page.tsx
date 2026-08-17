@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calcularPeriodo, costoPatronalMensual, inssPatronalRate } from "@/lib/payroll";
+import { parsearExcelColaboradores } from "@/lib/bulkImport";
 import { redirect } from "next/navigation";
 import SignOutButton from "@/components/SignOutButton";
 import SubmitButton from "@/components/SubmitButton";
@@ -29,6 +30,39 @@ async function addEmployee(formData: FormData) {
   await prisma.employee.create({
     data: { companyId, fullName, role, grossSalary, startDate },
   });
+}
+
+async function bulkUploadEmployees(formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  const companyId = (session?.user as any)?.companyId;
+  if (!companyId) return;
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) {
+    redirect(`/dashboard?carga=error&msg=${encodeURIComponent("No seleccionaste ningún archivo.")}`);
+  }
+
+  const buffer = await file!.arrayBuffer();
+  const { filas, errores } = parsearExcelColaboradores(buffer);
+
+  if (filas.length > 0) {
+    await prisma.employee.createMany({
+      data: filas.map((f) => ({
+        companyId,
+        fullName: f.fullName,
+        role: f.role,
+        grossSalary: f.grossSalary,
+        startDate: f.startDate,
+      })),
+    });
+  }
+
+  const params = new URLSearchParams();
+  params.set("carga", filas.length > 0 ? "ok" : "error");
+  params.set("agregados", String(filas.length));
+  params.set("omitidos", String(errores.length));
+  redirect(`/dashboard?${params.toString()}`);
 }
 
 async function runPayroll(formData: FormData) {
@@ -86,7 +120,7 @@ async function runPayroll(formData: FormData) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { periodo?: string };
+  searchParams: { periodo?: string; carga?: string; agregados?: string; omitidos?: string; msg?: string };
 }) {
   const session = await getServerSession(authOptions);
   const companyId = (session?.user as any)?.companyId;
@@ -187,6 +221,51 @@ export default async function DashboardPage({
             Agregar
           </SubmitButton>
         </form>
+      </section>
+
+      <section className="bg-panel border border-line rounded-xl p-6 mb-6">
+        <h3 className="font-serif text-lg font-semibold mb-2">Carga masiva desde Excel</h3>
+        <p className="text-inkdim text-sm mb-4">
+          Para negocios con muchos colaboradores: descarga la plantilla, llénala y súbela — se agregan todos de una sola vez.
+        </p>
+
+        {searchParams.carga === "ok" && (
+          <div className="bg-emerald/10 border border-emerald rounded-lg p-3 mb-4 text-sm">
+            Se agregaron <strong>{searchParams.agregados}</strong> colaboradores.
+            {Number(searchParams.omitidos) > 0 && (
+              <> Se omitieron {searchParams.omitidos} filas por datos incompletos.</>
+            )}
+          </div>
+        )}
+        {searchParams.carga === "error" && (
+          <div className="bg-lava/10 border border-lava rounded-lg p-3 mb-4 text-sm">
+            {searchParams.msg || "No se agregó ningún colaborador — revisa que el archivo use las columnas de la plantilla."}
+            {Number(searchParams.omitidos) > 0 && (
+              <> ({searchParams.omitidos} filas con problemas.)</>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3 items-end">
+          <a
+            href="/api/plantilla-colaboradores"
+            className="px-4 py-2.5 rounded-lg border border-linestrong text-sm text-inkdim hover:border-gold hover:text-gold transition"
+          >
+            Descargar plantilla (.xlsx)
+          </a>
+          <form action={bulkUploadEmployees} className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="block text-xs text-inkdim mb-1.5">Archivo (.xlsx)</label>
+              <input
+                name="file" type="file" accept=".xlsx,.xls" required
+                className="text-sm text-inkdim file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border file:border-linestrong file:bg-[#12181a] file:text-ink file:text-sm"
+              />
+            </div>
+            <SubmitButton className="px-5 py-3 rounded-lg bg-gold text-[#1b1500] text-sm font-medium" pendingText="Subiendo…">
+              Subir archivo
+            </SubmitButton>
+          </form>
+        </div>
       </section>
 
       <section className="bg-panel border border-line rounded-xl p-6">
