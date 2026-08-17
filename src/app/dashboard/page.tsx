@@ -117,6 +117,20 @@ async function runPayroll(formData: FormData) {
   });
 }
 
+async function aprobarPlanilla(formData: FormData) {
+  "use server";
+  const session = await getServerSession(authOptions);
+  const companyId = (session?.user as any)?.companyId;
+  if (!companyId) return;
+  const periodId = String(formData.get("periodId") || "");
+  const period = await prisma.payrollPeriod.findUnique({ where: { id: periodId } });
+  if (!period || period.companyId !== companyId || period.status === "APROBADA") return;
+  await prisma.payrollPeriod.update({
+    where: { id: periodId },
+    data: { status: "APROBADA", approvedAt: new Date() },
+  });
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -269,9 +283,9 @@ export default async function DashboardPage({
       </section>
 
       <section className="bg-panel border border-line rounded-xl p-6">
-        <h3 className="font-serif text-lg font-semibold mb-4">Correr planilla</h3>
+        <h3 className="font-serif text-lg font-semibold mb-4">Generar preplanilla</h3>
         <p className="text-inkdim text-sm mb-4">
-          Si algún colaborador tuvo horas extra, comisiones o viáticos este período, complétalos abajo antes de correr la planilla. Deja en blanco lo que no aplique.
+          Esto crea un borrador para revisión — todavía no es la planilla final. Descarga el PDF, mándaselo al cliente, y cuando lo apruebe, márcalo como aprobada abajo.
         </p>
         <form action={runPayroll}>
           <div className="mb-4">
@@ -311,7 +325,7 @@ export default async function DashboardPage({
           )}
 
           <SubmitButton className="px-5 py-3 rounded-lg bg-gold text-[#1b1500] text-sm font-medium" pendingText="Calculando…">
-            Correr planilla ahora
+            Generar preplanilla (borrador)
           </SubmitButton>
         </form>
       </section>
@@ -339,8 +353,29 @@ export default async function DashboardPage({
             )}
           </div>
 
-          <div className="text-xs text-inkfaint font-mono mb-3">
-            {selectedPeriod.label} · {selectedPeriod.payslips.length} comprobantes
+          <div className="flex justify-between items-center flex-wrap gap-3 mb-4">
+            <div className="text-xs text-inkfaint font-mono">
+              {selectedPeriod.label} · {selectedPeriod.payslips.length} comprobantes ·{" "}
+              <span className={selectedPeriod.status === "BORRADOR" ? "text-gold" : "text-emerald"}>
+                {selectedPeriod.status === "BORRADOR" ? "BORRADOR — pendiente de aprobación" : "APROBADA"}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <a
+                href={`/api/preplanilla/${selectedPeriod.id}`}
+                className="px-4 py-2 rounded-lg border border-linestrong text-xs text-inkdim hover:border-gold hover:text-gold transition"
+              >
+                {selectedPeriod.status === "BORRADOR" ? "Descargar preplanilla (PDF)" : "Descargar planilla (PDF)"}
+              </a>
+              {selectedPeriod.status === "BORRADOR" && (
+                <form action={aprobarPlanilla}>
+                  <input type="hidden" name="periodId" value={selectedPeriod.id} />
+                  <SubmitButton className="px-4 py-2 rounded-lg bg-emerald text-[#eafaf3] text-xs font-medium" pendingText="Aprobando…">
+                    Marcar como aprobada
+                  </SubmitButton>
+                </form>
+              )}
+            </div>
           </div>
 
           <div className="space-y-3">

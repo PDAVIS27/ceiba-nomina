@@ -54,7 +54,9 @@ model PayrollPeriod {
   companyId  String
   company    Company    @relation(fields: [companyId], references: [id])
   label      String
+  status     String     @default("BORRADOR") // BORRADOR (pendiente de aprobación) | APROBADA (final)
   createdAt  DateTime   @default(now())
+  approvedAt DateTime?
   payslips   Payslip[]
 }
 
