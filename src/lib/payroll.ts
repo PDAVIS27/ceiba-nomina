@@ -148,6 +148,7 @@ export interface DesglosePeriodo {
   horasExtraCantidad: number;
   horasExtraMonto: number;
   comisiones: number;
+  retroactivos: number;
   viaticos: number;
   totalGravable: number;
   inssLaboral: number;
@@ -165,32 +166,34 @@ export interface DesglosePeriodo {
 
 /**
  * Cálculo completo de un período de planilla para un colaborador, incluyendo
- * horas extra, comisiones (gravables), viáticos (no gravables) y las
- * provisiones laborales del mes.
+ * horas extra, comisiones y retroactivos (gravables), viáticos (no gravable)
+ * y las provisiones laborales del mes.
  *
- * SIMPLIFICACIÓN IMPORTANTE: para horas extra y comisiones (ingreso variable),
- * el Reglamento de la Ley 822 contempla un método de retención acumulativa
- * más preciso (año a año, ajustando lo ya retenido). Esta plataforma usa, por
- * ahora, una proyección simple del ingreso de ESTE período × 12 — es una
- * aproximación razonable pero no el método acumulativo completo. Un contador
- * debe confirmar si esto es aceptable para tu operación antes de usarlo con
- * clientes reales.
+ * SIMPLIFICACIÓN IMPORTANTE: para horas extra, comisiones y retroactivos
+ * (ingreso variable), el Reglamento de la Ley 822 contempla un método de
+ * retención acumulativa más preciso (año a año, ajustando lo ya retenido).
+ * Esta plataforma usa, por ahora, una proyección simple del ingreso de ESTE
+ * período × 12 — es una aproximación razonable pero no el método acumulativo
+ * completo. Un contador debe confirmar si esto es aceptable antes de usarlo
+ * con clientes reales.
  */
 export function calcularPeriodo(params: {
   bruto: number;
   horasExtraCantidad?: number;
   comisiones?: number;
+  retroactivos?: number;
   viaticos?: number;
   antiguedadMeses?: number;
 }): DesglosePeriodo {
   const bruto = params.bruto;
   const horasExtraCantidad = params.horasExtraCantidad || 0;
   const comisiones = params.comisiones || 0;
+  const retroactivos = params.retroactivos || 0;
   const viaticos = params.viaticos || 0;
   const antiguedadMeses = params.antiguedadMeses || 0;
 
   const horasExtraMonto = calcularHorasExtra(bruto, horasExtraCantidad);
-  const totalGravable = round2(bruto + horasExtraMonto + comisiones);
+  const totalGravable = round2(bruto + horasExtraMonto + comisiones + retroactivos);
 
   const inssLaboral = round2(totalGravable * INSS_LABORAL);
   const baseImponibleMensual = round2(totalGravable - inssLaboral);
@@ -213,6 +216,7 @@ export function calcularPeriodo(params: {
     horasExtraCantidad,
     horasExtraMonto,
     comisiones,
+    retroactivos,
     viaticos,
     totalGravable,
     inssLaboral,

@@ -7,6 +7,7 @@ export interface FilaPDF {
   horasExtraCantidad: number;
   horasExtraMonto: number;
   comisiones: number;
+  retroactivos: number;
   viaticos: number;
   inss: number;
   ir: number;
@@ -41,13 +42,14 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
   const margin = 40;
   const colX = {
     nombre: margin,
-    bruto: margin + 190,
-    horas: margin + 300,
-    com: margin + 370,
-    via: margin + 440,
-    inss: margin + 505,
-    ir: margin + 565,
-    neto: margin + 625,
+    bruto: margin + 175,
+    horas: margin + 275,
+    com: margin + 340,
+    retro: margin + 400,
+    via: margin + 460,
+    inss: margin + 520,
+    ir: margin + 575,
+    neto: margin + 630,
   };
 
   let page = pdf.addPage([pageWidth, pageHeight]);
@@ -101,6 +103,7 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
     texto("Bruto", colX.bruto, y, { size: 8, bold: true, color: DIM });
     texto("H. extra", colX.horas, y, { size: 8, bold: true, color: DIM });
     texto("Comis.", colX.com, y, { size: 8, bold: true, color: DIM });
+    texto("Retro.", colX.retro, y, { size: 8, bold: true, color: DIM });
     texto("Viáticos", colX.via, y, { size: 8, bold: true, color: DIM });
     texto("INSS", colX.inss, y, { size: 8, bold: true, color: DIM });
     texto("IR", colX.ir, y, { size: 8, bold: true, color: DIM });
@@ -120,6 +123,7 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
   let totBruto = 0,
     totExtra = 0,
     totCom = 0,
+    totRetro = 0,
     totVia = 0,
     totInss = 0,
     totIr = 0,
@@ -128,21 +132,23 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
   for (const f of datos.filas) {
     if (y < margin + 90) nuevaPagina();
 
-    texto(f.nombre.slice(0, 30), colX.nombre, y, { size: 9 });
-    texto(money(f.bruto), colX.bruto, y, { size: 9 });
-    texto(`${f.horasExtraCantidad}h / ${money(f.horasExtraMonto)}`, colX.horas, y, { size: 8 });
-    texto(money(f.comisiones), colX.com, y, { size: 9 });
-    texto(money(f.viaticos), colX.via, y, { size: 9 });
-    texto(money(f.inss), colX.inss, y, { size: 9 });
-    texto(money(f.ir), colX.ir, y, { size: 9 });
-    texto(money(f.neto), colX.neto, y, { size: 9, bold: true });
+    texto(f.nombre.slice(0, 28), colX.nombre, y, { size: 9 });
+    texto(money(f.bruto), colX.bruto, y, { size: 8.5 });
+    texto(`${f.horasExtraCantidad}h/${money(f.horasExtraMonto)}`, colX.horas, y, { size: 7.5 });
+    texto(money(f.comisiones), colX.com, y, { size: 8.5 });
+    texto(money(f.retroactivos), colX.retro, y, { size: 8.5 });
+    texto(money(f.viaticos), colX.via, y, { size: 8.5 });
+    texto(money(f.inss), colX.inss, y, { size: 8.5 });
+    texto(money(f.ir), colX.ir, y, { size: 8.5 });
+    texto(money(f.neto), colX.neto, y, { size: 8.5, bold: true });
     y -= 8;
-    texto(f.puesto.slice(0, 30), colX.nombre, y, { size: 7.5, color: DIM });
+    texto(f.puesto.slice(0, 28), colX.nombre, y, { size: 7.5, color: DIM });
     y -= 14;
 
     totBruto += f.bruto;
     totExtra += f.horasExtraMonto;
     totCom += f.comisiones;
+    totRetro += f.retroactivos;
     totVia += f.viaticos;
     totInss += f.inss;
     totIr += f.ir;
@@ -154,13 +160,14 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
   y -= 16;
 
   texto("TOTALES", colX.nombre, y, { size: 9, bold: true });
-  texto(money(totBruto), colX.bruto, y, { size: 9, bold: true });
-  texto(money(totExtra), colX.horas, y, { size: 9, bold: true });
-  texto(money(totCom), colX.com, y, { size: 9, bold: true });
-  texto(money(totVia), colX.via, y, { size: 9, bold: true });
-  texto(money(totInss), colX.inss, y, { size: 9, bold: true });
-  texto(money(totIr), colX.ir, y, { size: 9, bold: true });
-  texto(money(totNeto), colX.neto, y, { size: 9, bold: true });
+  texto(money(totBruto), colX.bruto, y, { size: 8.5, bold: true });
+  texto(money(totExtra), colX.horas, y, { size: 8.5, bold: true });
+  texto(money(totCom), colX.com, y, { size: 8.5, bold: true });
+  texto(money(totRetro), colX.retro, y, { size: 8.5, bold: true });
+  texto(money(totVia), colX.via, y, { size: 8.5, bold: true });
+  texto(money(totInss), colX.inss, y, { size: 8.5, bold: true });
+  texto(money(totIr), colX.ir, y, { size: 8.5, bold: true });
+  texto(money(totNeto), colX.neto, y, { size: 8.5, bold: true });
   y -= 40;
 
   if (datos.estado === "BORRADOR") {

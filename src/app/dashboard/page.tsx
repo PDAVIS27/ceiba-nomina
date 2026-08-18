@@ -32,13 +32,14 @@ async function addEmployee(formData: FormData) {
   });
 }
 
-async function bulkUploadEmployees(formData: FormData) {
+async function cargarPlanillaDesdeExcel(formData: FormData) {
   "use server";
   const session = await getServerSession(authOptions);
   const companyId = (session?.user as any)?.companyId;
   if (!companyId) return;
 
   const file = formData.get("file") as File | null;
+  const label = String(formData.get("label") || "Período sin nombre");
   if (!file || file.size === 0) {
     redirect(`/dashboard?carga=error&msg=${encodeURIComponent("No seleccionaste ningún archivo.")}`);
   }
@@ -46,20 +47,101 @@ async function bulkUploadEmployees(formData: FormData) {
   const buffer = await file!.arrayBuffer();
   const { filas, errores } = parsearExcelColaboradores(buffer);
 
-  if (filas.length > 0) {
-    await prisma.employee.createMany({
-      data: filas.map((f) => ({
-        companyId,
-        fullName: f.fullName,
-        role: f.role,
-        grossSalary: f.grossSalary,
-        startDate: f.startDate,
-      })),
-    });
+  if (filas.length === 0) {
+    redirect(
+      `/dashboard?carga=error&omitidos=${errores.length}&msg=${encodeURIComponent(
+        errores[0] || "El archivo no tiene filas válidas."
+      )}`
+    );
   }
 
+  const hoy = new Date();
+  const employeeIds: string[] = [];
+
+  for (const f of filas) {
+    let empleado = null as null | { id: string; startDate: Date };
+
+    // Primero intenta emparejar por código de colaborador (si el archivo lo trae).
+    if (f.externalCode) {
+      empleado = await prisma.employee.findUnique({
+        where: { companyId_externalCode: { companyId, externalCode: f.externalCode } },
+        select: { id: true, startDate: true },
+      });
+    }
+    // Si no hay código o no coincide, intenta por nombre exacto dentro del negocio.
+    if (!empleado) {
+      empleado = await prisma.employee.findFirst({
+        where: { companyId, fullName: { equals: f.fullName, mode: "insensitive" } },
+        select: { id: true, startDate: true },
+      });
+    }
+
+    if (empleado) {
+      await prisma.employee.update({
+        where: { id: empleado.id },
+        data: {
+          fullName: f.fullName,
+          role: f.role,
+          grossSalary: f.grossSalary,
+          externalCode: f.externalCode ?? undefined,
+          ...(f.startDate ? { startDate: f.startDate } : {}),
+        },
+      });
+      employeeIds.push(empleado.id);
+    } else {
+      const nuevo = await prisma.employee.create({
+        data: {
+          companyId,
+          externalCode: f.externalCode,
+          fullName: f.fullName,
+          role: f.role,
+          grossSalary: f.grossSalary,
+          startDate: f.startDate ?? hoy,
+        },
+      });
+      empleado = { id: nuevo.id, startDate: nuevo.startDate };
+      employeeIds.push(nuevo.id);
+    }
+
+    (f as any)._employeeId = empleado.id;
+    (f as any)._startDate = empleado.startDate;
+  }
+
+  const period = await prisma.payrollPeriod.create({ data: { companyId, label } });
+
+  await prisma.payslip.createMany({
+    data: filas.map((f: any) => {
+      const antiguedadMeses = mesesEntre(new Date(f._startDate), hoy);
+      const d = calcularPeriodo({
+        bruto: f.grossSalary,
+        horasExtraCantidad: f.horasExtraCantidad,
+        comisiones: 0,
+        retroactivos: f.retroactivos,
+        viaticos: f.viaticos,
+        antiguedadMeses,
+      });
+      return {
+        periodId: period.id,
+        employeeId: f._employeeId,
+        grossSalary: d.bruto,
+        horasExtraCantidad: d.horasExtraCantidad,
+        horasExtraMonto: d.horasExtraMonto,
+        comisiones: d.comisiones,
+        retroactivos: d.retroactivos,
+        viaticos: d.viaticos,
+        provisionAguinaldo: d.provisionAguinaldo,
+        provisionVacaciones: d.provisionVacaciones,
+        provisionIndemnizacion: d.provisionIndemnizacion,
+        inssLaboral: d.inssLaboral,
+        irMensual: d.irMensual,
+        netPay: d.netoPagar,
+      };
+    }),
+  });
+
   const params = new URLSearchParams();
-  params.set("carga", filas.length > 0 ? "ok" : "error");
+  params.set("periodo", period.id);
+  params.set("carga", "ok");
   params.set("agregados", String(filas.length));
   params.set("omitidos", String(errores.length));
   redirect(`/dashboard?${params.toString()}`);
@@ -87,6 +169,7 @@ async function runPayroll(formData: FormData) {
     data: employees.map((e) => {
       const horasExtraCantidad = Number(formData.get(`horas_${e.id}`) || 0);
       const comisiones = Number(formData.get(`com_${e.id}`) || 0);
+      const retroactivos = Number(formData.get(`retro_${e.id}`) || 0);
       const viaticos = Number(formData.get(`via_${e.id}`) || 0);
       const antiguedadMeses = mesesEntre(new Date(e.startDate), hoy);
 
@@ -94,6 +177,7 @@ async function runPayroll(formData: FormData) {
         bruto: Number(e.grossSalary),
         horasExtraCantidad,
         comisiones,
+        retroactivos,
         viaticos,
         antiguedadMeses,
       });
@@ -105,6 +189,7 @@ async function runPayroll(formData: FormData) {
         horasExtraCantidad: d.horasExtraCantidad,
         horasExtraMonto: d.horasExtraMonto,
         comisiones: d.comisiones,
+        retroactivos: d.retroactivos,
         viaticos: d.viaticos,
         provisionAguinaldo: d.provisionAguinaldo,
         provisionVacaciones: d.provisionVacaciones,
@@ -238,14 +323,16 @@ export default async function DashboardPage({
       </section>
 
       <section className="bg-panel border border-line rounded-xl p-6 mb-6">
-        <h3 className="font-serif text-lg font-semibold mb-2">Carga masiva desde Excel</h3>
+        <h3 className="font-serif text-lg font-semibold mb-2">Cargar planilla desde Excel</h3>
         <p className="text-inkdim text-sm mb-4">
-          Para negocios con muchos colaboradores: descarga la plantilla, llénala y súbela — se agregan todos de una sola vez.
+          Sube el archivo con código, nombre, departamento, salario, horas extra, viáticos y retroactivos —
+          la plataforma crea a quien no exista, actualiza a quien ya exista (por código o nombre), y genera
+          la preplanilla del período de una sola vez.
         </p>
 
         {searchParams.carga === "ok" && (
           <div className="bg-emerald/10 border border-emerald rounded-lg p-3 mb-4 text-sm">
-            Se agregaron <strong>{searchParams.agregados}</strong> colaboradores.
+            Se procesaron <strong>{searchParams.agregados}</strong> colaboradores y se generó la preplanilla.
             {Number(searchParams.omitidos) > 0 && (
               <> Se omitieron {searchParams.omitidos} filas por datos incompletos.</>
             )}
@@ -254,32 +341,31 @@ export default async function DashboardPage({
         {searchParams.carga === "error" && (
           <div className="bg-lava/10 border border-lava rounded-lg p-3 mb-4 text-sm">
             {searchParams.msg || "No se agregó ningún colaborador — revisa que el archivo use las columnas de la plantilla."}
-            {Number(searchParams.omitidos) > 0 && (
-              <> ({searchParams.omitidos} filas con problemas.)</>
-            )}
           </div>
         )}
 
-        <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex flex-wrap gap-3 items-end mb-3">
           <a
             href="/api/plantilla-colaboradores"
             className="px-4 py-2.5 rounded-lg border border-linestrong text-sm text-inkdim hover:border-gold hover:text-gold transition"
           >
             Descargar plantilla (.xlsx)
           </a>
-          <form action={bulkUploadEmployees} className="flex flex-wrap gap-3 items-end">
-            <div>
-              <label className="block text-xs text-inkdim mb-1.5">Archivo (.xlsx)</label>
-              <input
-                name="file" type="file" accept=".xlsx,.xls" required
-                className="text-sm text-inkdim file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border file:border-linestrong file:bg-[#12181a] file:text-ink file:text-sm"
-              />
-            </div>
-            <SubmitButton className="px-5 py-3 rounded-lg bg-gold text-[#1b1500] text-sm font-medium" pendingText="Subiendo…">
-              Subir archivo
-            </SubmitButton>
-          </form>
         </div>
+
+        <form action={cargarPlanillaDesdeExcel} className="flex flex-wrap gap-3 items-end">
+          <Field name="label" label="Nombre del período" placeholder="16–31 jul 2026" />
+          <div>
+            <label className="block text-xs text-inkdim mb-1.5">Archivo (.xlsx)</label>
+            <input
+              name="file" type="file" accept=".xlsx,.xls" required
+              className="text-sm text-inkdim file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border file:border-linestrong file:bg-[#12181a] file:text-ink file:text-sm"
+            />
+          </div>
+          <SubmitButton className="px-5 py-3 rounded-lg bg-gold text-[#1b1500] text-sm font-medium" pendingText="Procesando…">
+            Cargar y generar preplanilla
+          </SubmitButton>
+        </form>
       </section>
 
       <section className="bg-panel border border-line rounded-xl p-6">
@@ -299,6 +385,7 @@ export default async function DashboardPage({
                   <th className="pb-2">Colaborador</th>
                   <th className="pb-2 text-right">Horas extra</th>
                   <th className="pb-2 text-right">Comisiones (C$)</th>
+                  <th className="pb-2 text-right">Retroactivos (C$)</th>
                   <th className="pb-2 text-right">Viáticos (C$)</th>
                 </tr>
               </thead>
@@ -312,6 +399,10 @@ export default async function DashboardPage({
                     </td>
                     <td className="py-2.5 text-right">
                       <input name={`com_${e.id}`} type="number" min="0" step="1" defaultValue="0"
+                        className="w-28 bg-[#12181a] border border-linestrong rounded-lg px-2.5 py-1.5 text-sm text-right" />
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <input name={`retro_${e.id}`} type="number" min="0" step="1" defaultValue="0"
                         className="w-28 bg-[#12181a] border border-linestrong rounded-lg px-2.5 py-1.5 text-sm text-right" />
                     </td>
                     <td className="py-2.5 text-right">
@@ -401,6 +492,7 @@ export default async function DashboardPage({
                     <Detalle label="Salario bruto" value={money(Number(ps.grossSalary))} />
                     <Detalle label="Horas extra" value={`${Number(ps.horasExtraCantidad)} h · ${money(Number(ps.horasExtraMonto))}`} />
                     <Detalle label="Comisiones" value={money(Number(ps.comisiones))} />
+                    <Detalle label="Retroactivos" value={money(Number(ps.retroactivos))} />
                     <Detalle label="Viáticos (no gravable)" value={money(Number(ps.viaticos))} />
                     <Detalle label="INSS laboral (7%)" value={"− " + money(Number(ps.inssLaboral))} />
                     <Detalle label="IR retenido" value={"− " + money(Number(ps.irMensual))} />

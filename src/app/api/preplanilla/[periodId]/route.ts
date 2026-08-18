@@ -34,6 +34,7 @@ export async function GET(_req: Request, { params }: { params: { periodId: strin
       horasExtraCantidad: Number(ps.horasExtraCantidad),
       horasExtraMonto: Number(ps.horasExtraMonto),
       comisiones: Number(ps.comisiones),
+      retroactivos: Number(ps.retroactivos),
       viaticos: Number(ps.viaticos),
       inss: Number(ps.inssLaboral),
       ir: Number(ps.irMensual),
