@@ -6,6 +6,7 @@ export default function IRSimulator() {
   const [salario, setSalario] = useState(9200);
   const [horas, setHoras] = useState(0);
   const [comisiones, setComisiones] = useState(0);
+  const [retroactivos, setRetroactivos] = useState(0);
   const [viaticos, setViaticos] = useState(0);
   const [antiguedadMeses, setAntiguedadMeses] = useState(12);
 
@@ -13,16 +14,18 @@ export default function IRSimulator() {
     bruto: salario || 0,
     horasExtraCantidad: horas || 0,
     comisiones: comisiones || 0,
+    retroactivos: retroactivos || 0,
     viaticos: viaticos || 0,
     antiguedadMeses: antiguedadMeses || 0,
   });
 
   return (
     <div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-5">
         <NumField label="Salario bruto (C$)" value={salario} onChange={setSalario} />
         <NumField label="Horas extra" value={horas} onChange={setHoras} step={0.5} />
         <NumField label="Comisiones (C$)" value={comisiones} onChange={setComisiones} />
+        <NumField label="Retroactivos (C$)" value={retroactivos} onChange={setRetroactivos} />
         <NumField label="Viáticos (C$)" value={viaticos} onChange={setViaticos} />
         <NumField label="Antigüedad (meses)" value={antiguedadMeses} onChange={setAntiguedadMeses} />
       </div>
@@ -31,6 +34,7 @@ export default function IRSimulator() {
           <Row label="Salario bruto" value={money(d.bruto)} />
           <Row label="Horas extra (recargo 100%, Art. 62/65 CT)" value={money(d.horasExtraMonto)} />
           <Row label="Comisiones" value={money(d.comisiones)} />
+          <Row label="Retroactivos" value={money(d.retroactivos)} />
           <Row label="Total gravable" value={money(d.totalGravable)} />
           <Row label="INSS laboral (7%)" value={"− " + money(d.inssLaboral)} />
           <Row label="Base imponible mensual" value={money(d.baseImponibleMensual)} />

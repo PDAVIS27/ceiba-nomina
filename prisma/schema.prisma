@@ -66,9 +66,9 @@ model PayrollPeriod {
 model Payslip {
   id             String        @id @default(cuid())
   periodId       String
-  period         PayrollPeriod @relation(fields: [periodId], references: [id])
+  period         PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
   employeeId     String
-  employee       Employee      @relation(fields: [employeeId], references: [id])
+  employee       Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   grossSalary    Decimal       @db.Decimal(12, 2)
   horasExtraCantidad     Decimal @default(0) @db.Decimal(6, 2)
   horasExtraMonto        Decimal @default(0) @db.Decimal(12, 2)

@@ -27,6 +27,77 @@ function money(n: number): string {
   return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+export async function generarPDFComprobanteIndividual(datos: {
+  empresa: string;
+  periodo: string;
+  colaborador: string;
+  puesto: string;
+  bruto: number;
+  horasExtraCantidad: number;
+  horasExtraMonto: number;
+  comisiones: number;
+  retroactivos: number;
+  viaticos: number;
+  inss: number;
+  ir: number;
+  neto: number;
+}): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  const pageWidth = 320;
+  const pageHeight = 520;
+  const margin = 24;
+  const page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  function texto(t: string, x: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    page.drawText(t, { x, y: yy, size: opts.size ?? 9, font: opts.bold ? fontBold : font, color: opts.color ?? INK });
+  }
+  function linea(punteada = true) {
+    y -= 4;
+    if (punteada) {
+      for (let x = margin; x < pageWidth - margin; x += 4) {
+        page.drawLine({ start: { x, y }, end: { x: x + 2, y }, thickness: 0.75, color: LINE });
+      }
+    } else {
+      page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1, color: INK });
+    }
+    y -= 12;
+  }
+  function fila(label: string, valor: string, bold = false) {
+    texto(label, margin, y, { size: 9, color: bold ? INK : DIM, bold });
+    texto(valor, pageWidth - margin - font.widthOfTextAtSize(valor, 9), y, { size: 9, bold });
+    y -= 16;
+  }
+
+  texto("COMPROBANTE DE PAGO", margin, y, { size: 13, bold: true, color: EMERALD });
+  y -= 18;
+  texto(datos.empresa, margin, y, { size: 9, bold: true });
+  y -= 13;
+  texto(`Período: ${datos.periodo}`, margin, y, { size: 8, color: DIM });
+  linea();
+
+  texto(datos.colaborador, margin, y, { size: 11, bold: true });
+  y -= 12;
+  texto(datos.puesto, margin, y, { size: 8, color: DIM });
+  y -= 14;
+  linea();
+
+  fila("Salario bruto", money(datos.bruto));
+  if (datos.horasExtraMonto > 0) fila(`Horas extra (${datos.horasExtraCantidad}h)`, money(datos.horasExtraMonto));
+  if (datos.comisiones > 0) fila("Comisiones", money(datos.comisiones));
+  if (datos.retroactivos > 0) fila("Retroactivos", money(datos.retroactivos));
+  if (datos.viaticos > 0) fila("Viáticos (no gravable)", money(datos.viaticos));
+  fila("INSS laboral (7%)", "- " + money(datos.inss));
+  fila("IR retenido", "- " + money(datos.ir));
+  linea(false);
+  fila("NETO A PAGAR", money(datos.neto), true);
+
+  return pdf.save();
+}
+
 const INK = rgb(0.11, 0.14, 0.15);
 const DIM = rgb(0.42, 0.47, 0.46);
 const GOLD = rgb(0.61, 0.48, 0.12);

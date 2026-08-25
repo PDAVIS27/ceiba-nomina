@@ -41,6 +41,20 @@ async function createCase(formData: FormData) {
   await prisma.supportCase.create({ data: { companyId, title, detail } });
 }
 
+/**
+ * Herramienta de corrección de errores: te deja borrar un período de planilla
+ * completo (y sus comprobantes) sin importar su estado — para limpiar
+ * duplicados u otros errores humanos, como los que genera dar clic varias
+ * veces en "Generar preplanilla".
+ */
+async function eliminarPeriodoAdmin(formData: FormData) {
+  "use server";
+  const periodId = String(formData.get("periodId") || "");
+  if (!periodId) return;
+  await prisma.payslip.deleteMany({ where: { periodId } });
+  await prisma.payrollPeriod.delete({ where: { id: periodId } });
+}
+
 export default async function AdminPage({
   searchParams,
 }: {
@@ -54,6 +68,19 @@ export default async function AdminPage({
     include: { company: true },
     orderBy: { createdAt: "desc" },
   });
+  const periods = await prisma.payrollPeriod.findMany({
+    include: { company: true, payslips: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const conteoPorNombre: Record<string, number> = {};
+  for (const p of periods) {
+    const clave = `${p.companyId}::${p.label.trim().toLowerCase()}`;
+    conteoPorNombre[clave] = (conteoPorNombre[clave] || 0) + 1;
+  }
+  const periodosDuplicados = periods.filter(
+    (p) => conteoPorNombre[`${p.companyId}::${p.label.trim().toLowerCase()}`] > 1
+  );
 
   const openCases = cases.filter((c) => !c.resolved);
   const totalEmployees = companies.reduce((a, c) => a + c.employees.length, 0);
@@ -169,6 +196,64 @@ export default async function AdminPage({
             Registrar caso
           </button>
         </form>
+      </section>
+
+      <section className="bg-panel border border-line rounded-xl p-6 mb-6">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-serif text-lg font-semibold">Corregir errores</h3>
+          {periodosDuplicados.length > 0 && (
+            <span className="text-xs font-mono text-lava">{periodosDuplicados.length} posibles duplicados</span>
+          )}
+        </div>
+        <p className="text-inkdim text-sm mb-4">
+          Aquí puedes borrar un período de planilla completo (con sus comprobantes) si se generó por error —
+          por ejemplo, si un negocio le dio clic varias veces a "Generar preplanilla" con el mismo nombre.
+          Ya agregamos un candado que avisa antes de repetir un nombre, pero esto sirve para limpiar lo que
+          ya pasó.
+        </p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-inkfaint text-xs uppercase font-mono text-left border-b border-linestrong">
+              <th className="pb-2">Negocio</th>
+              <th className="pb-2">Período</th>
+              <th className="pb-2">Estado</th>
+              <th className="pb-2">Comprobantes</th>
+              <th className="pb-2">Creado</th>
+              <th className="pb-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {periods.map((p) => {
+              const esDuplicado = conteoPorNombre[`${p.companyId}::${p.label.trim().toLowerCase()}`] > 1;
+              return (
+                <tr key={p.id} className={`border-b border-line ${esDuplicado ? "bg-lava/5" : ""}`}>
+                  <td className="py-2.5">{p.company.name}</td>
+                  <td className="py-2.5">
+                    {p.label} {esDuplicado && <span className="text-lava text-xs ml-1">⚠ posible duplicado</span>}
+                  </td>
+                  <td className="py-2.5 text-xs font-mono">
+                    <span className={p.status === "BORRADOR" ? "text-gold" : "text-emerald"}>{p.status}</span>
+                  </td>
+                  <td className="py-2.5">{p.payslips.length}</td>
+                  <td className="py-2.5 text-xs text-inkfaint font-mono">
+                    {new Date(p.createdAt).toLocaleString("es-NI")}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <form action={eliminarPeriodoAdmin}>
+                      <input type="hidden" name="periodId" value={p.id} />
+                      <button className="px-3 py-1.5 rounded-lg border border-lava text-lava text-xs font-medium hover:bg-lava/10 transition">
+                        Eliminar
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              );
+            })}
+            {periods.length === 0 && (
+              <tr><td colSpan={6} className="py-6 text-center text-inkfaint">Todavía no hay períodos de planilla generados.</td></tr>
+            )}
+          </tbody>
+        </table>
       </section>
 
       <section className="bg-panel border border-line rounded-xl p-6">
