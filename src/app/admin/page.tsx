@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import SignOutButton from "@/components/SignOutButton";
+import SubmitButton from "@/components/SubmitButton";
 import IRSimulator from "@/components/IRSimulator";
 import crypto from "crypto";
 
@@ -12,6 +13,13 @@ async function createCompany(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const ownerEmail = String(formData.get("ownerEmail") || "").toLowerCase().trim();
   if (!name || !ownerEmail) return;
+
+  // Si ya existe una cuenta con ese correo (por ejemplo, por un doble clic o
+  // porque ya se había registrado antes), no truena — solo avisa.
+  const yaExiste = await prisma.user.findUnique({ where: { email: ownerEmail } });
+  if (yaExiste) {
+    redirect(`/admin?error=${encodeURIComponent(`Ya existe una cuenta con el correo ${ownerEmail}. Usa otro correo o revisa la lista de negocios.`)}`);
+  }
 
   const tempPassword = crypto.randomBytes(6).toString("base64url");
   const passwordHash = await bcrypt.hash(tempPassword, 10);
@@ -46,19 +54,23 @@ async function createCase(formData: FormData) {
  * completo (y sus comprobantes) sin importar su estado — para limpiar
  * duplicados u otros errores humanos, como los que genera dar clic varias
  * veces en "Generar preplanilla".
+ *
+ * Usa deleteMany (no delete) a propósito: si el período ya no existe —por
+ * ejemplo, porque el clic se registró dos veces— no truena con un error,
+ * simplemente no borra nada de nuevo.
  */
 async function eliminarPeriodoAdmin(formData: FormData) {
   "use server";
   const periodId = String(formData.get("periodId") || "");
   if (!periodId) return;
   await prisma.payslip.deleteMany({ where: { periodId } });
-  await prisma.payrollPeriod.delete({ where: { id: periodId } });
+  await prisma.payrollPeriod.deleteMany({ where: { id: periodId } });
 }
 
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: { created?: string; pwd?: string };
+  searchParams: { created?: string; pwd?: string; error?: string };
 }) {
   const companies = await prisma.company.findMany({
     include: { employees: true },
@@ -94,6 +106,10 @@ export default async function AdminPage({
         </div>
         <SignOutButton />
       </div>
+
+      {searchParams.error && (
+        <div className="bg-lava/10 border border-lava rounded-xl p-4 mb-8 text-sm">{searchParams.error}</div>
+      )}
 
       {searchParams.created && (
         <div className="bg-emerald/10 border border-emerald rounded-xl p-4 mb-8 text-sm">
@@ -148,9 +164,9 @@ export default async function AdminPage({
             <input name="ownerEmail" type="email" required placeholder="dueño@negocio.com"
               className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
           </div>
-          <button className="px-5 py-3 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium">
+          <SubmitButton className="px-5 py-3 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium" pendingText="Registrando…">
             Registrar negocio
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -166,9 +182,9 @@ export default async function AdminPage({
             </div>
             <form action={toggleCase}>
               <input type="hidden" name="id" value={c.id} />
-              <button className={`px-3.5 py-2 rounded-lg text-xs font-medium ${c.resolved ? "border border-linestrong" : "bg-emerald text-[#eafaf3]"}`}>
+              <SubmitButton className={`px-3.5 py-2 rounded-lg text-xs font-medium ${c.resolved ? "border border-linestrong" : "bg-emerald text-[#eafaf3]"}`}>
                 {c.resolved ? "Reabrir" : "Marcar resuelto"}
-              </button>
+              </SubmitButton>
             </form>
           </div>
         ))}
@@ -192,9 +208,9 @@ export default async function AdminPage({
             <input name="detail" placeholder="Qué necesita revisión y por qué"
               className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm w-80" />
           </div>
-          <button className="px-5 py-3 rounded-lg bg-lava text-white text-sm font-medium">
+          <SubmitButton className="px-5 py-3 rounded-lg bg-lava text-white text-sm font-medium" pendingText="Registrando…">
             Registrar caso
-          </button>
+          </SubmitButton>
         </form>
       </section>
 
@@ -241,9 +257,12 @@ export default async function AdminPage({
                   <td className="py-2.5 text-right">
                     <form action={eliminarPeriodoAdmin}>
                       <input type="hidden" name="periodId" value={p.id} />
-                      <button className="px-3 py-1.5 rounded-lg border border-lava text-lava text-xs font-medium hover:bg-lava/10 transition">
+                      <SubmitButton
+                        className="px-3 py-1.5 rounded-lg border border-lava text-lava text-xs font-medium hover:bg-lava/10 transition"
+                        pendingText="Eliminando…"
+                      >
                         Eliminar
-                      </button>
+                      </SubmitButton>
                     </form>
                   </td>
                 </tr>
