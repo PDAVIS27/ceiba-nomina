@@ -108,15 +108,46 @@ En el panel del proyecto, ve a **Settings → Environment Variables** y agrega:
 
 ---
 
+## Histórico de provisiones y liquidación al dar de baja
+
+Cada vez que apruebas una planilla, la plataforma guarda cuánto se provisionó
+ese mes de aguinaldo, vacaciones e indemnización por antigüedad para cada
+colaborador (Código del Trabajo, Ley 185). Eso arma un histórico acumulado
+que puedes ver entrando al detalle de cualquier colaborador desde
+Colaboradores → "Ver →".
+
+Desde esa misma pantalla puedes:
+
+- **Registrar el pago de aguinaldo** (normalmente en diciembre) y **registrar
+  vacaciones tomadas** — ambos reducen el saldo acumulado pendiente.
+- **Dar de baja** a un colaborador: eliges la fecha y el tipo de baja
+  (renuncia, despido con justa causa, despido sin causa, u otra causa ajena)
+  y la plataforma calcula la liquidación — aguinaldo y vacaciones pendientes
+  siempre, e indemnización por antigüedad SOLO cuando el tipo de baja
+  corresponde (normalmente despido sin causa u otra causa ajena, no en
+  renuncia ni en despido con justa causa). Queda un PDF descargable.
+
+**Limitación importante:** el histórico solo se acumula cuando corres y
+apruebas una planilla ese mes — si un negocio se atrasa varios meses sin
+correr nómina, el acumulado de esos meses no queda registrado. Insístele a
+tus clientes en correr la planilla puntualmente.
+
 ## Cosas que debes saber antes de vender esto
 
 - **Las tasas de ley pueden cambiar.** Si el INSS, el MHCP o la Asamblea
   Nacional publican una reforma, hay que actualizar `src/lib/payroll.ts` — ese
   archivo es el único lugar donde vive la fórmula. Pídeme ayuda cuando eso pase.
-- **La fórmula de IR cubre solo salario fijo mensual.** Casos con comisiones
-  variables, aguinaldo, vacaciones, indemnizaciones o doble empleador no están
-  automatizados todavía — para eso está la sección de "Casos abiertos" en tu
-  panel: regístralos ahí y resuélvelos a mano con el simulador.
+- **Horas extra, comisiones, retroactivos y viáticos ya están automatizados**
+  (Código del Trabajo para horas extra, proyección simple para el resto).
+  Lo que sigue sin automatizar es el caso de un colaborador con **doble
+  empleador** — eso queda fuera del alcance de la nómina de un solo negocio y
+  debe resolverse a mano; para eso está la sección de "Casos abiertos" en tu
+  panel.
+- **La indemnización por antigüedad y la liquidación de baja son una
+  aproximación.** Se calculan con la fórmula del Art. 45 CT sobre el salario
+  actual del colaborador — no soy abogado ni contador, así que antes de pagar
+  una liquidación real, sobre todo una disputada, que la revise un abogado
+  laboral o contador nicaragüense.
 - **La contraseña temporal se muestra una sola vez en una URL.** Es una
   simplificación para la primera versión — no es ideal para producción a largo
   plazo. Antes de tener muchos clientes, conviene agregar un flujo de invitación

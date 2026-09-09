@@ -98,6 +98,111 @@ export async function generarPDFComprobanteIndividual(datos: {
   return pdf.save();
 }
 
+export async function generarPDFLiquidacion(datos: {
+  empresa: string;
+  colaborador: string;
+  puesto: string;
+  fechaIngreso: Date;
+  fechaBaja: Date;
+  antiguedadMeses: number;
+  tipoBajaLabel: string;
+  aguinaldoPendiente: number;
+  vacacionesPendientes: number;
+  aplicaIndemnizacion: boolean;
+  indemnizacion: number;
+  total: number;
+}): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  const pageWidth = 320;
+  const pageHeight = 560;
+  const margin = 24;
+  const page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  function texto(t: string, x: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    page.drawText(t, { x, y: yy, size: opts.size ?? 9, font: opts.bold ? fontBold : font, color: opts.color ?? INK });
+  }
+  function textoMultilinea(t: string, x: number, ancho: number, size = 7.5, color = DIM) {
+    const palabras = t.split(" ");
+    let linea = "";
+    for (const palabra of palabras) {
+      const prueba = linea ? `${linea} ${palabra}` : palabra;
+      if (font.widthOfTextAtSize(prueba, size) > ancho && linea) {
+        texto(linea, x, y, { size, color });
+        y -= size + 3;
+        linea = palabra;
+      } else {
+        linea = prueba;
+      }
+    }
+    if (linea) {
+      texto(linea, x, y, { size, color });
+      y -= size + 3;
+    }
+  }
+  function linea(punteada = true) {
+    y -= 4;
+    if (punteada) {
+      for (let x = margin; x < pageWidth - margin; x += 4) {
+        page.drawLine({ start: { x, y }, end: { x: x + 2, y }, thickness: 0.75, color: LINE });
+      }
+    } else {
+      page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1, color: INK });
+    }
+    y -= 12;
+  }
+  function fila(label: string, valor: string, bold = false) {
+    texto(label, margin, y, { size: 9, color: bold ? INK : DIM, bold });
+    texto(valor, pageWidth - margin - font.widthOfTextAtSize(valor, 9), y, { size: 9, bold });
+    y -= 16;
+  }
+
+  texto("LIQUIDACIÓN FINAL", margin, y, { size: 13, bold: true, color: EMERALD });
+  y -= 18;
+  texto(datos.empresa, margin, y, { size: 9, bold: true });
+  y -= 13;
+  texto(`Generada: ${new Date().toLocaleString("es-NI")}`, margin, y, { size: 8, color: DIM });
+  linea();
+
+  texto(datos.colaborador, margin, y, { size: 11, bold: true });
+  y -= 12;
+  texto(datos.puesto, margin, y, { size: 8, color: DIM });
+  y -= 14;
+  linea();
+
+  fila("Fecha de ingreso", datos.fechaIngreso.toLocaleDateString("es-NI"));
+  fila("Fecha de baja", datos.fechaBaja.toLocaleDateString("es-NI"));
+  fila("Antigüedad", `${datos.antiguedadMeses} meses`);
+  fila("Tipo de baja", "");
+  textoMultilinea(datos.tipoBajaLabel, margin, pageWidth - margin * 2, 8, INK);
+  linea();
+
+  fila("Aguinaldo pendiente", money(datos.aguinaldoPendiente));
+  fila("Vacaciones pendientes", money(datos.vacacionesPendientes));
+  if (datos.aplicaIndemnizacion) {
+    fila("Indemnización por antigüedad", money(datos.indemnizacion));
+  } else {
+    texto("Indemnización por antigüedad: no aplica", margin, y, { size: 8, color: DIM });
+    y -= 16;
+  }
+  linea(false);
+  fila("TOTAL A LIQUIDAR", money(datos.total), true);
+  y -= 10;
+
+  textoMultilinea(
+    "Este cálculo es una aproximación generada por la plataforma a partir de las planillas aprobadas y los movimientos registrados. No sustituye la revisión de un contador o abogado laboral, especialmente en bajas disputadas o con conceptos no cubiertos por Ceiba (doble empleador, salario variable no planillado, etc.).",
+    margin,
+    pageWidth - margin * 2,
+    7,
+    DIM
+  );
+
+  return pdf.save();
+}
+
 const INK = rgb(0.11, 0.14, 0.15);
 const DIM = rgb(0.42, 0.47, 0.46);
 const GOLD = rgb(0.61, 0.48, 0.12);

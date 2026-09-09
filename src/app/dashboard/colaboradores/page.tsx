@@ -3,6 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calcularPeriodo } from "@/lib/payroll";
 import { mesesEntre } from "@/lib/dateUtils";
+import { TERMINATION_LABELS } from "@/lib/provisiones";
+import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
 import { addEmployee } from "@/app/dashboard/actions";
 
@@ -15,6 +17,11 @@ export default async function ColaboradoresPage() {
   const employees = await prisma.employee.findMany({
     where: { companyId, active: true },
     orderBy: { createdAt: "asc" },
+  });
+  const bajas = await prisma.employee.findMany({
+    where: { companyId, active: false },
+    include: { liquidacion: true },
+    orderBy: { terminatedAt: "desc" },
   });
 
   const hoy = new Date();
@@ -54,6 +61,7 @@ export default async function ColaboradoresPage() {
               <th className="pb-2 text-right">IR</th>
               <th className="pb-2 text-right">Neto</th>
               <th className="pb-2 text-right">Ingreso</th>
+              <th className="pb-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -72,14 +80,60 @@ export default async function ColaboradoresPage() {
                 <td className="py-3 text-right text-xs text-inkfaint font-mono">
                   {new Date(e.startDate).toLocaleDateString("es-NI")}
                 </td>
+                <td className="py-3 text-right">
+                  <Link href={`/dashboard/colaboradores/${e.id}`} className="text-xs text-gold hover:underline">
+                    Ver →
+                  </Link>
+                </td>
               </tr>
             ))}
             {employees.length === 0 && (
-              <tr><td colSpan={6} className="py-6 text-center text-inkfaint">Todavía no agregas colaboradores.</td></tr>
+              <tr><td colSpan={7} className="py-6 text-center text-inkfaint">Todavía no agregas colaboradores.</td></tr>
             )}
           </tbody>
         </table>
       </section>
+
+      {bajas.length > 0 && (
+        <section className="bg-panel border border-line rounded-xl p-6 mt-6">
+          <h3 className="font-serif text-lg font-semibold mb-4">Colaboradores dados de baja</h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-inkfaint text-xs uppercase font-mono text-left border-b border-linestrong">
+                <th className="pb-2">Colaborador</th>
+                <th className="pb-2">Tipo de baja</th>
+                <th className="pb-2">Fecha</th>
+                <th className="pb-2 text-right">Total liquidado</th>
+                <th className="pb-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {bajas.map((e) => (
+                <tr key={e.id} className="border-b border-line">
+                  <td className="py-3">
+                    <div className="font-medium">{e.fullName}</div>
+                    <div className="text-xs text-inkfaint">{e.role}</div>
+                  </td>
+                  <td className="py-3 text-xs text-inkdim">
+                    {e.terminationType ? TERMINATION_LABELS[e.terminationType as keyof typeof TERMINATION_LABELS]?.label : "—"}
+                  </td>
+                  <td className="py-3 text-xs font-mono text-inkfaint">
+                    {e.terminatedAt && new Date(e.terminatedAt).toLocaleDateString("es-NI")}
+                  </td>
+                  <td className="py-3 text-right font-mono">
+                    {e.liquidacion ? money(Number(e.liquidacion.total)) : "—"}
+                  </td>
+                  <td className="py-3 text-right">
+                    <Link href={`/dashboard/colaboradores/${e.id}`} className="text-xs text-gold hover:underline">
+                      Ver →
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
     </div>
   );
 }

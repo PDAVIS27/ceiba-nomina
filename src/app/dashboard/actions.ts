@@ -5,9 +5,14 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calcularPeriodo } from "@/lib/payroll";
 import { parsearExcelColaboradores } from "@/lib/bulkImport";
+import { calcularLiquidacion, TERMINATION_LABELS, type TerminationTypeKey } from "@/lib/provisiones";
 import { redirect } from "next/navigation";
 
 import { mesesEntre } from "@/lib/dateUtils";
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
 async function requireCompanyId(): Promise<string> {
   const session = await getServerSession(authOptions);
@@ -249,4 +254,138 @@ export async function reportarProblema(formData: FormData) {
   if (!title) return;
   await prisma.supportCase.create({ data: { companyId, title, detail } });
   redirect("/dashboard/reportar?ok=1");
+}
+
+async function getOwnEmployee(companyId: string, employeeId: string) {
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+  if (!employee || employee.companyId !== companyId) return null;
+  return employee;
+}
+
+/** Registra que se pagó el aguinaldo (normalmente en diciembre) — reduce el saldo acumulado. */
+export async function pagarAguinaldo(formData: FormData) {
+  const companyId = await requireCompanyId();
+  const employeeId = String(formData.get("employeeId") || "");
+  const amount = Number(formData.get("amount") || 0);
+  const note = String(formData.get("note") || "").trim() || null;
+
+  const employee = await getOwnEmployee(companyId, employeeId);
+  if (!employee) return;
+  if (amount <= 0) {
+    redirect(`/dashboard/colaboradores/${employeeId}?error=${encodeURIComponent("Ingresa un monto mayor a cero.")}`);
+  }
+
+  await prisma.provisionMovement.create({
+    data: { employeeId, companyId, tipo: "AGUINALDO", amount, note },
+  });
+  redirect(`/dashboard/colaboradores/${employeeId}?ok=aguinaldo`);
+}
+
+/** Registra días de vacaciones tomados/disfrutados — reduce el saldo acumulado. */
+export async function registrarVacacionesTomadas(formData: FormData) {
+  const companyId = await requireCompanyId();
+  const employeeId = String(formData.get("employeeId") || "");
+  const dias = Number(formData.get("dias") || 0);
+  const note = String(formData.get("note") || "").trim() || null;
+
+  const employee = await getOwnEmployee(companyId, employeeId);
+  if (!employee) return;
+  if (dias <= 0) {
+    redirect(`/dashboard/colaboradores/${employeeId}?error=${encodeURIComponent("Ingresa una cantidad de días mayor a cero.")}`);
+  }
+
+  const amount = round2((Number(employee.grossSalary) / 30) * dias);
+  await prisma.provisionMovement.create({
+    data: { employeeId, companyId, tipo: "VACACIONES", amount, dias, note },
+  });
+  redirect(`/dashboard/colaboradores/${employeeId}?ok=vacaciones`);
+}
+
+/**
+ * Da de baja a un colaborador: lo marca inactivo, guarda el motivo de la
+ * baja, y congela la liquidación calculada en ese momento (aguinaldo y
+ * vacaciones pendientes, más indemnización por antigüedad si el tipo de baja
+ * corresponde — ver src/lib/provisiones.ts).
+ */
+export async function darDeBaja(formData: FormData) {
+  const companyId = await requireCompanyId();
+  const employeeId = String(formData.get("employeeId") || "");
+  const terminationType = String(formData.get("terminationType") || "") as TerminationTypeKey;
+  const terminatedAtRaw = String(formData.get("terminatedAt") || "");
+  const note = String(formData.get("note") || "").trim() || null;
+
+  const employee = await getOwnEmployee(companyId, employeeId);
+  if (!employee || !employee.active) return;
+
+  if (!Object.keys(TERMINATION_LABELS).includes(terminationType)) {
+    redirect(`/dashboard/colaboradores/${employeeId}?error=${encodeURIComponent("Elige un tipo de baja válido.")}`);
+  }
+
+  const terminatedAt = terminatedAtRaw ? new Date(terminatedAtRaw) : new Date();
+  if (terminatedAt < new Date(employee.startDate)) {
+    redirect(
+      `/dashboard/colaboradores/${employeeId}?error=${encodeURIComponent(
+        "La fecha de baja no puede ser anterior a la fecha de ingreso."
+      )}`
+    );
+  }
+
+  const antiguedadMeses = mesesEntre(new Date(employee.startDate), terminatedAt);
+  const liq = await calcularLiquidacion(employeeId, terminationType);
+
+  await prisma.$transaction([
+    prisma.employee.update({
+      where: { id: employeeId },
+      data: { active: false, terminatedAt, terminationType, terminationNote: note },
+    }),
+    prisma.liquidacion.upsert({
+      where: { employeeId },
+      create: {
+        employeeId,
+        companyId,
+        terminationType,
+        terminatedAt,
+        antiguedadMeses,
+        aguinaldoPendiente: liq.aguinaldoSaldo,
+        vacacionesPendientes: liq.vacacionesSaldo,
+        aplicaIndemnizacion: liq.aplicaIndemnizacion,
+        indemnizacion: liq.indemnizacion,
+        total: liq.total,
+        note,
+      },
+      update: {
+        terminationType,
+        terminatedAt,
+        antiguedadMeses,
+        aguinaldoPendiente: liq.aguinaldoSaldo,
+        vacacionesPendientes: liq.vacacionesSaldo,
+        aplicaIndemnizacion: liq.aplicaIndemnizacion,
+        indemnizacion: liq.indemnizacion,
+        total: liq.total,
+        note,
+      },
+    }),
+  ]);
+
+  redirect(`/dashboard/colaboradores/${employeeId}?ok=baja`);
+}
+
+/**
+ * Reingresa a un colaborador dado de baja por error — lo reactiva y borra
+ * su liquidación calculada (no borra el histórico de planillas ni de pagos).
+ */
+export async function reingresarColaborador(formData: FormData) {
+  const companyId = await requireCompanyId();
+  const employeeId = String(formData.get("employeeId") || "");
+  const employee = await getOwnEmployee(companyId, employeeId);
+  if (!employee || employee.active) return;
+
+  await prisma.$transaction([
+    prisma.liquidacion.deleteMany({ where: { employeeId } }),
+    prisma.employee.update({
+      where: { id: employeeId },
+      data: { active: true, terminatedAt: null, terminationType: null, terminationNote: null },
+    }),
+  ]);
+  redirect(`/dashboard/colaboradores/${employeeId}?ok=reingreso`);
 }
