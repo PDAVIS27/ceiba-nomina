@@ -2,16 +2,17 @@
 // Histórico de provisiones laborales por colaborador (aguinaldo, vacaciones,
 // indemnización) y cálculo de la liquidación final al dar de baja.
 //
-// CÓMO SE ACUMULA: cada vez que se aprueba una planilla (PayrollPeriod con
-// status "APROBADA"), el Payslip de ese colaborador ya trae guardado cuánto
-// se provisionó ese mes (ver src/lib/payroll.ts). Este archivo simplemente
-// SUMA esos montos por colaborador para tener el acumulado histórico — no
-// hay una tabla aparte de "provisión mensual".
-//
-// LIMITACIÓN CONOCIDA: si un mes no se corre/aprueba ninguna planilla para un
-// colaborador, ese mes no acumula provisión (no hay un cálculo independiente
-// por calendario). Para que el histórico sea confiable, la nómina debe
-// correrse y aprobarse puntualmente cada período.
+// CÓMO SE ACUMULA:
+// 1) Cada vez que se aprueba una planilla (PayrollPeriod con status
+//    "APROBADA"), el Payslip de ese colaborador ya trae guardado cuánto se
+//    provisionó en ese período (ver src/lib/payroll.ts). Eso se SUMA como
+//    base del acumulado.
+// 2) Además, se PRORRATEA por día el tramo entre el fin de la última planilla
+//    aprobada (su `periodEnd`) y la fecha de corte solicitada (hoy, o la
+//    fecha de baja) — así un colaborador que sale a mitad de un período no
+//    pierde esos días sueltos. Si una planilla vieja no tiene `periodEnd`
+//    guardado (periodos creados antes de este campo), se usa su `createdAt`
+//    como aproximación de hasta dónde llegaba cubierto.
 //
 // PAGOS Y DISFRUTE: el aguinaldo pagado en diciembre y las vacaciones tomadas
 // se registran como ProvisionMovement y se restan del acumulado para dar el
@@ -20,7 +21,13 @@
 // ---------------------------------------------------------------------------
 
 import { prisma } from "@/lib/prisma";
-import { calcularIR } from "@/lib/payroll";
+import {
+  calcularIR,
+  provisionAguinaldoPorDias,
+  provisionVacacionesPorDias,
+  provisionIndemnizacionPorDias,
+} from "@/lib/payroll";
+import { mesesEntre, diasEntre360 } from "@/lib/dateUtils";
 
 export type TerminationTypeKey =
   | "RENUNCIA"
@@ -70,23 +77,75 @@ export interface BalanceProvisiones {
   vacacionesAcumulado: number;
   vacacionesTomado: number;
   vacacionesSaldo: number;
-  // Total acumulado a la fecha de la última planilla aprobada — es lo que se
-  // pagaría por indemnización SI la baja aplicara (ver aplicaIndemnizacionPorTipo).
+  // Total acumulado a la fecha de corte — es lo que se pagaría por
+  // indemnización SI la baja aplicara (ver aplicaIndemnizacionPorTipo).
   indemnizacionAcumulada: number;
+  // Días sueltos (después de la última planilla aprobada) que se
+  // prorratearon por día para llegar a la fecha de corte. 0 si la fecha de
+  // corte ya estaba cubierta por una planilla aprobada, o si el colaborador
+  // no tiene planillas ni fecha de ingreso registrada.
+  diasProrrateados: number;
 }
 
-export async function balanceProvisiones(employeeId: string): Promise<BalanceProvisiones> {
-  const [payslips, movimientos] = await Promise.all([
+/**
+ * Acumulado de provisiones de un colaborador hasta la fecha `hasta`
+ * (por defecto, hoy). Para un colaborador dado de baja, pásale su fecha de
+ * baja para "congelar" el cálculo ahí en vez de seguir corriendo hasta hoy.
+ */
+export async function balanceProvisiones(employeeId: string, hasta: Date = new Date()): Promise<BalanceProvisiones> {
+  const [employee, payslips, movimientos] = await Promise.all([
+    prisma.employee.findUnique({ where: { id: employeeId } }),
     prisma.payslip.findMany({
       where: { employeeId, period: { status: "APROBADA" } },
-      select: { provisionAguinaldo: true, provisionVacaciones: true, provisionIndemnizacion: true },
+      select: {
+        provisionAguinaldo: true,
+        provisionVacaciones: true,
+        provisionIndemnizacion: true,
+        createdAt: true,
+        period: { select: { periodEnd: true } },
+      },
     }),
     prisma.provisionMovement.findMany({ where: { employeeId } }),
   ]);
 
-  const aguinaldoAcumulado = round2(payslips.reduce((a, p) => a + Number(p.provisionAguinaldo), 0));
-  const vacacionesAcumulado = round2(payslips.reduce((a, p) => a + Number(p.provisionVacaciones), 0));
-  const indemnizacionAcumulada = round2(payslips.reduce((a, p) => a + Number(p.provisionIndemnizacion), 0));
+  const aguinaldoDePlanillas = round2(payslips.reduce((a, p) => a + Number(p.provisionAguinaldo), 0));
+  const vacacionesDePlanillas = round2(payslips.reduce((a, p) => a + Number(p.provisionVacaciones), 0));
+  const indemnizacionDePlanillas = round2(payslips.reduce((a, p) => a + Number(p.provisionIndemnizacion), 0));
+
+  // Prorrateo del tramo final: desde el día siguiente al fin de la última
+  // planilla aprobada (o desde su fecha de ingreso, si nunca se le ha
+  // corrido una) hasta la fecha de corte — para no perder los días sueltos
+  // de un colaborador que sale a mitad de un período.
+  let diasProrrateados = 0;
+  let aguinaldoProrrateo = 0;
+  let vacacionesProrrateo = 0;
+  let indemnizacionProrrateo = 0;
+
+  if (employee) {
+    const fechasCobertura = payslips.map((p) => p.period.periodEnd ?? p.createdAt);
+    const ultimaFechaCubierta =
+      fechasCobertura.length > 0 ? new Date(Math.max(...fechasCobertura.map((d) => d.getTime()))) : null;
+
+    const desde = ultimaFechaCubierta
+      ? new Date(ultimaFechaCubierta.getTime() + 24 * 60 * 60 * 1000)
+      : new Date(employee.startDate);
+
+    if (desde <= hasta) {
+      const dias = diasEntre360(desde, hasta) + 1;
+      if (dias > 0) {
+        const salario = Number(employee.grossSalary);
+        const mesesAlIniciarTramo = mesesEntre(new Date(employee.startDate), desde);
+        diasProrrateados = dias;
+        aguinaldoProrrateo = provisionAguinaldoPorDias(salario, dias);
+        vacacionesProrrateo = provisionVacacionesPorDias(salario, dias);
+        indemnizacionProrrateo = provisionIndemnizacionPorDias(salario, mesesAlIniciarTramo, dias);
+      }
+    }
+  }
+
+  const aguinaldoAcumulado = round2(aguinaldoDePlanillas + aguinaldoProrrateo);
+  const vacacionesAcumulado = round2(vacacionesDePlanillas + vacacionesProrrateo);
+  const indemnizacionAcumulada = round2(indemnizacionDePlanillas + indemnizacionProrrateo);
 
   const aguinaldoPagado = round2(
     movimientos.filter((m) => m.tipo === "AGUINALDO").reduce((a, m) => a + Number(m.amount), 0)
@@ -103,6 +162,7 @@ export async function balanceProvisiones(employeeId: string): Promise<BalancePro
     vacacionesTomado,
     vacacionesSaldo: round2(Math.max(0, vacacionesAcumulado - vacacionesTomado)),
     indemnizacionAcumulada,
+    diasProrrateados,
   };
 }
 
@@ -154,17 +214,20 @@ export interface DesgloseLiquidacion extends BalanceProvisiones {
 
 /**
  * Calcula lo que corresponde pagarle a un colaborador si se le diera de baja
- * hoy con el tipo de terminación indicado, incluyendo cualquier pago
- * pendiente (quincena no planillada, mes adicional, etc.) con sus
- * retenciones de ley. No escribe nada en la base de datos — eso lo hace la
- * acción darDeBaja al confirmar.
+ * en `terminatedAt` con el tipo de terminación indicado, incluyendo
+ * cualquier pago pendiente (quincena no planillada, mes adicional, etc.) con
+ * sus retenciones de ley. Las provisiones se calculan CONGELADAS a esa fecha
+ * (no a hoy), prorrateando por día el tramo desde la última planilla
+ * aprobada. No escribe nada en la base de datos — eso lo hace la acción
+ * darDeBaja al confirmar.
  */
 export async function calcularLiquidacion(
   employeeId: string,
   terminationType: TerminationTypeKey,
+  terminatedAt: Date,
   pagoPendienteBruto: number = 0
 ): Promise<DesgloseLiquidacion> {
-  const balance = await balanceProvisiones(employeeId);
+  const balance = await balanceProvisiones(employeeId, terminatedAt);
   const aplicaIndemnizacion = aplicaIndemnizacionPorTipo(terminationType);
   const indemnizacion = aplicaIndemnizacion ? balance.indemnizacionAcumulada : 0;
   const pagoPendiente = calcularRetencionPagoPendiente(pagoPendienteBruto);

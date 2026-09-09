@@ -89,6 +89,12 @@ model PayrollPeriod {
   createdAt  DateTime   @default(now())
   approvedAt DateTime?
   payslips   Payslip[]
+
+  // Fecha real que cubre este período (no solo el nombre libre de "label").
+  // Nulas en períodos creados antes de este campo — el histórico de
+  // provisiones cae de vuelta a createdAt para esos casos (ver provisiones.ts).
+  periodStart DateTime?
+  periodEnd   DateTime?
 }
 
 model Payslip {

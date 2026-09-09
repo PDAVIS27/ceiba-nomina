@@ -111,26 +111,43 @@ En el panel del proyecto, ve a **Settings → Environment Variables** y agrega:
 ## Histórico de provisiones y liquidación al dar de baja
 
 Cada vez que apruebas una planilla, la plataforma guarda cuánto se provisionó
-ese mes de aguinaldo, vacaciones e indemnización por antigüedad para cada
+ese período de aguinaldo, vacaciones e indemnización por antigüedad para cada
 colaborador (Código del Trabajo, Ley 185). Eso arma un histórico acumulado
 que puedes ver entrando al detalle de cualquier colaborador desde
 Colaboradores → "Ver →".
 
-Desde esa misma pantalla puedes:
+**Importante — ahora hay que indicar la fecha de inicio y fin de cada
+período** al correr la planilla (tanto la carga desde Excel como el
+formulario a mano, en Nómina). La plataforma usa esa fecha de fin para saber
+exactamente hasta qué día quedó cubierto cada colaborador, y así puede
+**prorratear por día** cualquier tramo suelto entre la última planilla
+aprobada y la fecha de baja (o "hoy", si el colaborador sigue activo) — así
+nadie pierde los días de un período incompleto. El prorrateo usa la misma
+convención de 30 días por mes que ya usa el resto de la nómina para el valor
+diario del salario. Cuando aplica, verás una nota en el detalle del
+colaborador indicando cuántos días se prorratearon.
+
+*Períodos creados antes de este cambio no tienen fecha de fin guardada — para
+esos, la plataforma usa la fecha en que se creó el período como aproximación.
+No hace falta corregir nada a mano; simplemente los períodos nuevos van a
+quedar más precisos.*
+
+Desde la pantalla de detalle del colaborador puedes:
 
 - **Registrar el pago de aguinaldo** (normalmente en diciembre) y **registrar
   vacaciones tomadas** — ambos reducen el saldo acumulado pendiente.
 - **Dar de baja** a un colaborador: eliges la fecha y el tipo de baja
   (renuncia, despido con justa causa, despido sin causa, u otra causa ajena)
   y la plataforma calcula la liquidación — aguinaldo y vacaciones pendientes
-  siempre, e indemnización por antigüedad SOLO cuando el tipo de baja
-  corresponde (normalmente despido sin causa u otra causa ajena, no en
-  renuncia ni en despido con justa causa). Queda un PDF descargable.
-
-**Limitación importante:** el histórico solo se acumula cuando corres y
-apruebas una planilla ese mes — si un negocio se atrasa varios meses sin
-correr nómina, el acumulado de esos meses no queda registrado. Insístele a
-tus clientes en correr la planilla puntualmente.
+  siempre (con el prorrateo por día ya incluido), e indemnización por
+  antigüedad SOLO cuando el tipo de baja corresponde (normalmente despido sin
+  causa u otra causa ajena, no en renuncia ni en despido con justa causa).
+  Opcionalmente puedes agregar un **pago pendiente** (una quincena que no se
+  alcanzó a planillar, un mes adicional, una comisión, etc.) — se le calcula
+  INSS laboral (7%) e IR según el Art. 23 de la Ley 822, evaluando ese monto
+  de forma independiente contra la tabla progresiva (igual que se evaluaría
+  un cheque aparte, no sumado al salario regular). Todo queda en un PDF
+  descargable.
 
 ## Cosas que debes saber antes de vender esto
 

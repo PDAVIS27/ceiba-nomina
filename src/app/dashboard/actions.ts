@@ -47,6 +47,26 @@ async function existeBorradorConEseNombre(companyId: string, label: string) {
   return existente;
 }
 
+/**
+ * Lee y valida las fechas de inicio/fin de un período desde el formulario.
+ * Se guardan en el PayrollPeriod para que el histórico de provisiones sepa
+ * exactamente hasta qué día quedó cubierto (ver src/lib/provisiones.ts) —
+ * sin esto, un colaborador que sale a mitad de un período pierde esos días.
+ */
+function leerFechasPeriodo(formData: FormData, redirectA: string): { periodStart: Date; periodEnd: Date } {
+  const periodStartRaw = String(formData.get("periodStart") || "");
+  const periodEndRaw = String(formData.get("periodEnd") || "");
+  if (!periodStartRaw || !periodEndRaw) {
+    redirect(`${redirectA}?error=${encodeURIComponent("Indica la fecha de inicio y fin del período.")}`);
+  }
+  const periodStart = new Date(periodStartRaw);
+  const periodEnd = new Date(periodEndRaw);
+  if (periodEnd < periodStart) {
+    redirect(`${redirectA}?error=${encodeURIComponent("La fecha de fin no puede ser anterior a la de inicio.")}`);
+  }
+  return { periodStart, periodEnd };
+}
+
 export async function runPayroll(formData: FormData) {
   const companyId = await requireCompanyId();
 
@@ -54,6 +74,7 @@ export async function runPayroll(formData: FormData) {
   if (employees.length === 0) return;
 
   const label = String(formData.get("label") || "Período sin nombre").trim();
+  const { periodStart, periodEnd } = leerFechasPeriodo(formData, "/dashboard/nomina");
 
   const duplicado = await existeBorradorConEseNombre(companyId, label);
   if (duplicado) {
@@ -64,7 +85,7 @@ export async function runPayroll(formData: FormData) {
     );
   }
 
-  const period = await prisma.payrollPeriod.create({ data: { companyId, label } });
+  const period = await prisma.payrollPeriod.create({ data: { companyId, label, periodStart, periodEnd } });
   const hoy = new Date();
 
   await prisma.payslip.createMany({
@@ -114,6 +135,7 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
   if (!file || file.size === 0) {
     redirect(`/dashboard/nomina?error=${encodeURIComponent("No seleccionaste ningún archivo.")}`);
   }
+  const { periodStart, periodEnd } = leerFechasPeriodo(formData, "/dashboard/nomina");
 
   const duplicado = await existeBorradorConEseNombre(companyId, label);
   if (duplicado) {
@@ -180,7 +202,7 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
     (f as any)._startDate = empleado.startDate;
   }
 
-  const period = await prisma.payrollPeriod.create({ data: { companyId, label } });
+  const period = await prisma.payrollPeriod.create({ data: { companyId, label, periodStart, periodEnd } });
 
   await prisma.payslip.createMany({
     data: (filas as any[]).map((f) => {
@@ -341,7 +363,7 @@ export async function darDeBaja(formData: FormData) {
   }
 
   const antiguedadMeses = mesesEntre(new Date(employee.startDate), terminatedAt);
-  const liq = await calcularLiquidacion(employeeId, terminationType, pagoPendienteBruto);
+  const liq = await calcularLiquidacion(employeeId, terminationType, terminatedAt, pagoPendienteBruto);
 
   await prisma.$transaction([
     prisma.employee.update({

@@ -43,6 +43,8 @@ export default async function NominaPage({
         </div>
         <form action={cargarPlanillaDesdeExcel} className="flex flex-wrap gap-3 items-end">
           <Field name="label" label="Nombre del período" placeholder="16–31 jul 2026" />
+          <FechaField name="periodStart" label="Fecha de inicio" />
+          <FechaField name="periodEnd" label="Fecha de fin" />
           <div>
             <label className="block text-xs text-inkdim mb-1.5">Archivo (.xlsx)</label>
             <input
@@ -60,11 +62,15 @@ export default async function NominaPage({
         <h3 className="font-serif text-lg font-semibold mb-2">Generar preplanilla a mano</h3>
         <p className="text-inkdim text-sm mb-4">
           Esto crea un borrador para revisión — todavía no es la final. Complétalo, descarga el PDF en
-          Históricos, y cuando el cliente lo apruebe, márcalo como aprobado ahí mismo.
+          Históricos, y cuando el cliente lo apruebe, márcalo como aprobado ahí mismo. La fecha de fin es
+          importante: es lo que usa la plataforma para saber hasta qué día quedó cubierto cada colaborador en
+          el histórico de provisiones (ver su detalle en Colaboradores).
         </p>
         <form action={runPayroll}>
-          <div className="mb-4">
+          <div className="mb-4 flex flex-wrap gap-3 items-end">
             <Field name="label" label="Nombre del período" placeholder="16–31 jul 2026" />
+            <FechaField name="periodStart" label="Fecha de inicio" />
+            <FechaField name="periodEnd" label="Fecha de fin" />
           </div>
 
           {employees.length > 0 && (
@@ -121,6 +127,16 @@ function Field({ name, label, placeholder }: { name: string; label: string; plac
     <div>
       <label className="block text-xs text-inkdim mb-1.5">{label}</label>
       <input name={name} type="text" required placeholder={placeholder}
+        className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
+    </div>
+  );
+}
+
+function FechaField({ name, label }: { name: string; label: string }) {
+  return (
+    <div>
+      <label className="block text-xs text-inkdim mb-1.5">{label}</label>
+      <input name={name} type="date" required
         className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
     </div>
   );

@@ -147,6 +147,42 @@ export function provisionIndemnizacion(salarioMensual: number, antiguedadMeses: 
   return round2((salarioMensual / 30) * diasMensuales);
 }
 
+// ---------------------------------------------------------------------------
+// Versiones POR DÍA de las tres provisiones de arriba — para prorratear el
+// tramo final de un colaborador que sale a mitad de un período (ver
+// src/lib/provisiones.ts). Usan la misma convención de 30 días por mes / 360
+// por año que ya usa valorHoraOrdinaria().
+// ---------------------------------------------------------------------------
+
+/** Aguinaldo por una cantidad exacta de días trabajados (salario/360 por día). */
+export function provisionAguinaldoPorDias(salarioMensual: number, dias: number): number {
+  return round2((salarioMensual / 360) * Math.max(dias, 0));
+}
+
+/** Vacaciones por una cantidad exacta de días trabajados (salario/360 por día). */
+export function provisionVacacionesPorDias(salarioMensual: number, dias: number): number {
+  return round2((salarioMensual / 360) * Math.max(dias, 0));
+}
+
+/**
+ * Indemnización por antigüedad para un tramo de días, usando la tasa del año
+ * de antigüedad vigente AL INICIAR ese tramo (30 días/año los primeros 3
+ * años, 20 días/año del 4 al 6, nada después del año 6). Asume que el tramo
+ * completo de días cae dentro del mismo año de antigüedad — razonable porque
+ * este tramo suele ser de pocos días (el resto del período en que sale el
+ * colaborador, no meses enteros).
+ */
+export function provisionIndemnizacionPorDias(
+  salarioMensual: number,
+  antiguedadMesesAlIniciarTramo: number,
+  dias: number
+): number {
+  if (antiguedadMesesAlIniciarTramo >= 72 || dias <= 0) return 0;
+  const anioEnCurso = Math.floor(antiguedadMesesAlIniciarTramo / 12) + 1;
+  const diasPorAnio = anioEnCurso <= 3 ? 30 : 20;
+  return round2((salarioMensual / 30) * (diasPorAnio / 360) * dias);
+}
+
 export interface DesglosePeriodo {
   bruto: number;
   horasExtraCantidad: number;

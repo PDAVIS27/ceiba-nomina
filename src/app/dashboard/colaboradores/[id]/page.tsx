@@ -41,8 +41,11 @@ export default async function ColaboradorDetallePage({
     );
   }
 
+  const hoy = new Date();
+  const fechaCorte = employee.terminatedAt ? new Date(employee.terminatedAt) : hoy;
+
   const [balance, payslips, movimientos, liquidacion] = await Promise.all([
-    balanceProvisiones(employee.id),
+    balanceProvisiones(employee.id, fechaCorte),
     prisma.payslip.findMany({
       where: { employeeId: employee.id, period: { status: "APROBADA" } },
       include: { period: true },
@@ -52,8 +55,7 @@ export default async function ColaboradorDetallePage({
     prisma.liquidacion.findUnique({ where: { employeeId: employee.id } }),
   ]);
 
-  const hoy = new Date();
-  const antiguedadMeses = mesesEntre(new Date(employee.startDate), employee.terminatedAt ?? hoy);
+  const antiguedadMeses = mesesEntre(new Date(employee.startDate), fechaCorte);
 
   return (
     <div>
@@ -103,6 +105,15 @@ export default async function ColaboradorDetallePage({
           <div className="text-xs text-inkdim mt-1">Solo se paga si la baja es sin causa u otra causa ajena (Art. 45 CT)</div>
         </div>
       </div>
+
+      {balance.diasProrrateados > 0 && (
+        <div className="bg-panel/60 border border-line rounded-xl px-5 py-3 mb-8 text-xs text-inkdim">
+          Los montos de arriba incluyen <span className="text-ink font-mono">{balance.diasProrrateados} día{balance.diasProrrateados === 1 ? "" : "s"}</span>{" "}
+          prorrateados{"  "}
+          ({employee.terminatedAt ? "hasta su fecha de baja" : "hasta hoy"}) que todavía no están cubiertos por ninguna
+          planilla aprobada — se calculan con la convención de 30 días por mes, igual que el resto de la nómina.
+        </div>
+      )}
 
       <section className="bg-panel border border-line rounded-xl p-6 mb-6">
         <h3 className="font-serif text-lg font-semibold mb-4">Histórico de provisiones por período</h3>
