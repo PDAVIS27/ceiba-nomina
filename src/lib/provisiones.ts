@@ -20,7 +20,7 @@
 // ---------------------------------------------------------------------------
 
 import { prisma } from "@/lib/prisma";
-import { calcularIR, impuestoAnualSegunTabla, INSS_LABORAL } from "@/lib/payroll";
+import { calcularIR } from "@/lib/payroll";
 
 export type TerminationTypeKey =
   | "RENUNCIA"
@@ -115,45 +115,34 @@ export interface DesglosePagoPendiente {
 
 /**
  * Retenciones sobre un pago pendiente al momento de la baja (una quincena que
- * no se alcanzó a planillar, un mes adicional, una comisión, etc.), aplicando
- * el Art. 23 de la Ley 822 correctamente para un pago ÚNICO (no recurrente):
+ * no se alcanzó a planillar, un mes adicional, una comisión, etc.).
  *
- * 1. INSS laboral 7% sobre el monto pendiente, como cualquier ingreso gravable.
- * 2. Se suma la base del pendiente (ya sin INSS) UNA SOLA VEZ a la expectativa
- *    de renta anual del colaborador — no doce veces. Sumarlo doce veces (como
- *    si el pendiente se fuera a repetir cada mes) infla artificialmente la
- *    proyección anual y puede hacerlo cruzar un tramo de IR que un pago único
- *    real nunca cruzaría.
- * 3. Se calcula el impuesto anual con esa expectativa ajustada y se le resta
- *    el impuesto anual que ya le correspondía por su salario regular — esa
- *    diferencia es el IR que genera el pendiente.
- * 4. Como es un pago único y la relación laboral termina aquí, esa diferencia
- *    se retiene COMPLETA en este pago — no se divide entre 12 meses (no hay
- *    próximos meses en los que seguir cobrándola).
+ * Se le aplica EXACTAMENTE la misma fórmula del Art. 23 (Ley 822) que a
+ * cualquier salario mensual — la misma que usa calcularIR() para la planilla
+ * normal — pero usando el monto gravable de este pago como si fuera, él
+ * solo, el salario del período: INSS laboral 7%, base imponible, expectativa
+ * de renta anual (base × 12) y tarifa progresiva sobre esa expectativa.
  *
- * SIMPLIFICACIÓN: esto asume que el pendiente es el único ingreso adicional
- * del año para ese colaborador. Un contador debe confirmar el cálculo antes
- * de liquidar un caso real, sobre todo si ya hubo otros pagos variables
- * (horas extra, comisiones) en planillas anteriores de este mismo año.
+ * NO se combina con el salario regular del colaborador ni con lo que ya haya
+ * ganado en el año: el pendiente se evalúa de forma independiente contra la
+ * tabla, igual que se evaluaría un cheque aparte. Por eso montos pequeños
+ * (una comisión de unos cientos de córdobas, por ejemplo) casi siempre caen
+ * enteros en el tramo exento (hasta C$100,000 de expectativa anual) y no
+ * generan IR, mientras que un monto grande (un mes completo adicional) se
+ * grava igual que un mes normal de ese mismo salario.
+ *
+ * SIMPLIFICACIÓN: si el colaborador ya tuvo otros ingresos variables altos
+ * en planillas anteriores de este mismo año, el método acumulativo del
+ * Reglamento pediría sumarlos todos antes de aplicar la tabla — esta
+ * plataforma no lleva ese acumulado interanual. Un contador debe confirmar
+ * el cálculo antes de liquidar un caso real.
  */
-export function calcularRetencionPagoPendiente(
-  salarioMensualRegular: number,
-  pagoPendienteBruto: number
-): DesglosePagoPendiente {
+export function calcularRetencionPagoPendiente(pagoPendienteBruto: number): DesglosePagoPendiente {
   if (pagoPendienteBruto <= 0) {
     return { bruto: 0, inss: 0, ir: 0, neto: 0 };
   }
-  const sinPendiente = calcularIR(salarioMensualRegular);
-
-  const inss = round2(pagoPendienteBruto * INSS_LABORAL);
-  const baseImponiblePendiente = round2(pagoPendienteBruto - inss);
-  const expectativaAnualConPendiente = round2(sinPendiente.expectativaAnual + baseImponiblePendiente);
-
-  const irAnualConPendiente = impuestoAnualSegunTabla(expectativaAnualConPendiente);
-  const ir = round2(Math.max(irAnualConPendiente - sinPendiente.irAnual, 0));
-
-  const neto = round2(pagoPendienteBruto - inss - ir);
-  return { bruto: round2(pagoPendienteBruto), inss, ir, neto };
+  const d = calcularIR(pagoPendienteBruto);
+  return { bruto: round2(pagoPendienteBruto), inss: d.inssLaboral, ir: d.irMensual, neto: d.neto };
 }
 
 export interface DesgloseLiquidacion extends BalanceProvisiones {
@@ -175,13 +164,10 @@ export async function calcularLiquidacion(
   terminationType: TerminationTypeKey,
   pagoPendienteBruto: number = 0
 ): Promise<DesgloseLiquidacion> {
-  const [balance, employee] = await Promise.all([
-    balanceProvisiones(employeeId),
-    prisma.employee.findUnique({ where: { id: employeeId }, select: { grossSalary: true } }),
-  ]);
+  const balance = await balanceProvisiones(employeeId);
   const aplicaIndemnizacion = aplicaIndemnizacionPorTipo(terminationType);
   const indemnizacion = aplicaIndemnizacion ? balance.indemnizacionAcumulada : 0;
-  const pagoPendiente = calcularRetencionPagoPendiente(Number(employee?.grossSalary ?? 0), pagoPendienteBruto);
+  const pagoPendiente = calcularRetencionPagoPendiente(pagoPendienteBruto);
   const total = round2(balance.aguinaldoSaldo + balance.vacacionesSaldo + indemnizacion + pagoPendiente.neto);
   return { ...balance, aplicaIndemnizacion, indemnizacion, pagoPendiente, total };
 }
