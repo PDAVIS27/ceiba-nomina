@@ -237,6 +237,24 @@ export default async function ColaboradorDetallePage({
                 <input name="note" placeholder="Detalle del caso"
                   className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
               </div>
+
+              <div className="w-full border-t border-line pt-3 mt-1">
+                <p className="text-xs text-inkfaint mb-3">
+                  Salario que se le debe y todavía no se le ha pagado (una quincena que no se alcanzó a planillar,
+                  un mes adicional, etc.) — opcional. Se le calcula INSS e IR igual que a cualquier salario.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs text-inkdim mb-1.5">Concepto del pago pendiente</label>
+                <input name="pagoPendienteConcepto" placeholder='Ej. "Quincena 1-15 sept" o "Mes adicional"'
+                  className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm w-64" />
+              </div>
+              <div>
+                <label className="block text-xs text-inkdim mb-1.5">Monto bruto pendiente (C$)</label>
+                <input name="pagoPendienteBruto" type="number" min="0" step="0.01" defaultValue="0"
+                  className="w-36 bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
+              </div>
+
               <SubmitButton className="px-5 py-3 rounded-lg bg-lava text-white text-sm font-medium" pendingText="Calculando…">
                 Dar de baja y calcular liquidación
               </SubmitButton>
@@ -275,6 +293,21 @@ export default async function ColaboradorDetallePage({
               value={liquidacion.aplicaIndemnizacion ? money(Number(liquidacion.indemnizacion)) : "No aplica"}
             />
           </div>
+
+          {Number(liquidacion.pagoPendienteBruto) > 0 && (
+            <div className="border-t border-line pt-4 mb-4">
+              <div className="text-xs text-inkfaint uppercase font-mono mb-2">
+                Pago pendiente{liquidacion.pagoPendienteConcepto && ` — ${liquidacion.pagoPendienteConcepto}`}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
+                <Detalle label="Bruto" value={money(Number(liquidacion.pagoPendienteBruto))} />
+                <Detalle label="INSS laboral (7%)" value={"− " + money(Number(liquidacion.pagoPendienteInss))} />
+                <Detalle label="IR retenido" value={"− " + money(Number(liquidacion.pagoPendienteIr))} />
+                <Detalle label="Neto pendiente" value={money(Number(liquidacion.pagoPendienteNeto))} />
+              </div>
+            </div>
+          )}
+
           <div className="pt-4 border-t border-line flex justify-between items-center">
             <span className="text-sm text-inkdim">Total a liquidar</span>
             <span className="font-serif text-2xl font-semibold">{money(Number(liquidacion.total))}</span>

@@ -314,6 +314,9 @@ export async function darDeBaja(formData: FormData) {
   const terminatedAtRaw = String(formData.get("terminatedAt") || "");
   const note = String(formData.get("note") || "").trim() || null;
 
+  const pagoPendienteBruto = Number(formData.get("pagoPendienteBruto") || 0);
+  const pagoPendienteConcepto = String(formData.get("pagoPendienteConcepto") || "").trim() || null;
+
   const employee = await getOwnEmployee(companyId, employeeId);
   if (!employee || !employee.active) return;
 
@@ -329,9 +332,16 @@ export async function darDeBaja(formData: FormData) {
       )}`
     );
   }
+  if (pagoPendienteBruto > 0 && !pagoPendienteConcepto) {
+    redirect(
+      `/dashboard/colaboradores/${employeeId}?error=${encodeURIComponent(
+        "Si agregas un pago pendiente, indica de qué se trata (ej. \"Quincena 1-15 sept\" o \"Mes adicional\")."
+      )}`
+    );
+  }
 
   const antiguedadMeses = mesesEntre(new Date(employee.startDate), terminatedAt);
-  const liq = await calcularLiquidacion(employeeId, terminationType);
+  const liq = await calcularLiquidacion(employeeId, terminationType, pagoPendienteBruto);
 
   await prisma.$transaction([
     prisma.employee.update({
@@ -350,6 +360,11 @@ export async function darDeBaja(formData: FormData) {
         vacacionesPendientes: liq.vacacionesSaldo,
         aplicaIndemnizacion: liq.aplicaIndemnizacion,
         indemnizacion: liq.indemnizacion,
+        pagoPendienteConcepto,
+        pagoPendienteBruto: liq.pagoPendiente.bruto,
+        pagoPendienteInss: liq.pagoPendiente.inss,
+        pagoPendienteIr: liq.pagoPendiente.ir,
+        pagoPendienteNeto: liq.pagoPendiente.neto,
         total: liq.total,
         note,
       },
@@ -361,6 +376,11 @@ export async function darDeBaja(formData: FormData) {
         vacacionesPendientes: liq.vacacionesSaldo,
         aplicaIndemnizacion: liq.aplicaIndemnizacion,
         indemnizacion: liq.indemnizacion,
+        pagoPendienteConcepto,
+        pagoPendienteBruto: liq.pagoPendiente.bruto,
+        pagoPendienteInss: liq.pagoPendiente.inss,
+        pagoPendienteIr: liq.pagoPendiente.ir,
+        pagoPendienteNeto: liq.pagoPendiente.neto,
         total: liq.total,
         note,
       },

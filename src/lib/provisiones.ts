@@ -20,6 +20,7 @@
 // ---------------------------------------------------------------------------
 
 import { prisma } from "@/lib/prisma";
+import { calcularIR, calcularPeriodo } from "@/lib/payroll";
 
 export type TerminationTypeKey =
   | "RENUNCIA"
@@ -105,26 +106,73 @@ export async function balanceProvisiones(employeeId: string): Promise<BalancePro
   };
 }
 
+export interface DesglosePagoPendiente {
+  bruto: number;
+  inss: number;
+  ir: number;
+  neto: number;
+}
+
+/**
+ * Retenciones sobre un pago pendiente al momento de la baja (una quincena que
+ * no se alcanzó a planillar, un mes adicional, etc.). Se calcula con el mismo
+ * método "proyección con el ingreso adicional" que ya usa payroll.ts para
+ * horas extra/comisiones/retroactivos: se recalcula el INSS y el IR sobre el
+ * salario mensual regular MÁS el pendiente, y la diferencia contra el INSS/IR
+ * del salario regular solo es la retención que le corresponde al pendiente.
+ * Así, si el pendiente empuja al colaborador a un tramo de IR más alto, esa
+ * parte queda gravada correctamente en vez de tratarse como si fuera un
+ * salario mensual aparte (lo que subestimaría el IR de un pago grande, como
+ * un mes completo adicional).
+ *
+ * SIMPLIFICACIÓN: igual que con retroactivos, esta es una aproximación
+ * razonable, no el método acumulativo exacto del Reglamento — un contador
+ * debe confirmarla antes de liquidar un caso real.
+ */
+export function calcularRetencionPagoPendiente(
+  salarioMensualRegular: number,
+  pagoPendienteBruto: number
+): DesglosePagoPendiente {
+  if (pagoPendienteBruto <= 0) {
+    return { bruto: 0, inss: 0, ir: 0, neto: 0 };
+  }
+  const sinPendiente = calcularIR(salarioMensualRegular);
+  const conPendiente = calcularPeriodo({ bruto: salarioMensualRegular, retroactivos: pagoPendienteBruto });
+
+  const inss = round2(conPendiente.inssLaboral - sinPendiente.inssLaboral);
+  const ir = round2(conPendiente.irMensual - sinPendiente.irMensual);
+  const neto = round2(pagoPendienteBruto - inss - ir);
+  return { bruto: round2(pagoPendienteBruto), inss, ir, neto };
+}
+
 export interface DesgloseLiquidacion extends BalanceProvisiones {
   aplicaIndemnizacion: boolean;
   indemnizacion: number;
+  pagoPendiente: DesglosePagoPendiente;
   total: number;
 }
 
 /**
  * Calcula lo que corresponde pagarle a un colaborador si se le diera de baja
- * hoy con el tipo de terminación indicado. No escribe nada en la base de
- * datos — eso lo hace la acción darDeBaja al confirmar.
+ * hoy con el tipo de terminación indicado, incluyendo cualquier pago
+ * pendiente (quincena no planillada, mes adicional, etc.) con sus
+ * retenciones de ley. No escribe nada en la base de datos — eso lo hace la
+ * acción darDeBaja al confirmar.
  */
 export async function calcularLiquidacion(
   employeeId: string,
-  terminationType: TerminationTypeKey
+  terminationType: TerminationTypeKey,
+  pagoPendienteBruto: number = 0
 ): Promise<DesgloseLiquidacion> {
-  const balance = await balanceProvisiones(employeeId);
+  const [balance, employee] = await Promise.all([
+    balanceProvisiones(employeeId),
+    prisma.employee.findUnique({ where: { id: employeeId }, select: { grossSalary: true } }),
+  ]);
   const aplicaIndemnizacion = aplicaIndemnizacionPorTipo(terminationType);
   const indemnizacion = aplicaIndemnizacion ? balance.indemnizacionAcumulada : 0;
-  const total = round2(balance.aguinaldoSaldo + balance.vacacionesSaldo + indemnizacion);
-  return { ...balance, aplicaIndemnizacion, indemnizacion, total };
+  const pagoPendiente = calcularRetencionPagoPendiente(Number(employee?.grossSalary ?? 0), pagoPendienteBruto);
+  const total = round2(balance.aguinaldoSaldo + balance.vacacionesSaldo + indemnizacion + pagoPendiente.neto);
+  return { ...balance, aplicaIndemnizacion, indemnizacion, pagoPendiente, total };
 }
 
 function round2(n: number): number {

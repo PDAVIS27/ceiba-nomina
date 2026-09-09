@@ -34,6 +34,11 @@ export async function GET(_req: Request, { params }: { params: { employeeId: str
     vacacionesPendientes: Number(liq.vacacionesPendientes),
     aplicaIndemnizacion: liq.aplicaIndemnizacion,
     indemnizacion: Number(liq.indemnizacion),
+    pagoPendienteConcepto: liq.pagoPendienteConcepto,
+    pagoPendienteBruto: Number(liq.pagoPendienteBruto),
+    pagoPendienteInss: Number(liq.pagoPendienteInss),
+    pagoPendienteIr: Number(liq.pagoPendienteIr),
+    pagoPendienteNeto: Number(liq.pagoPendienteNeto),
     total: Number(liq.total),
   });
 

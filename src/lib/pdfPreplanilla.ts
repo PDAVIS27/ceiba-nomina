@@ -110,6 +110,11 @@ export async function generarPDFLiquidacion(datos: {
   vacacionesPendientes: number;
   aplicaIndemnizacion: boolean;
   indemnizacion: number;
+  pagoPendienteConcepto?: string | null;
+  pagoPendienteBruto: number;
+  pagoPendienteInss: number;
+  pagoPendienteIr: number;
+  pagoPendienteNeto: number;
   total: number;
 }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
@@ -117,7 +122,7 @@ export async function generarPDFLiquidacion(datos: {
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   const pageWidth = 320;
-  const pageHeight = 560;
+  const pageHeight = 660;
   const margin = 24;
   const page = pdf.addPage([pageWidth, pageHeight]);
   let y = pageHeight - margin;
@@ -188,6 +193,22 @@ export async function generarPDFLiquidacion(datos: {
     texto("Indemnización por antigüedad: no aplica", margin, y, { size: 8, color: DIM });
     y -= 16;
   }
+
+  if (datos.pagoPendienteBruto > 0) {
+    linea();
+    texto(
+      `Pago pendiente${datos.pagoPendienteConcepto ? ` — ${datos.pagoPendienteConcepto}` : ""}`,
+      margin,
+      y,
+      { size: 8, bold: true, color: INK }
+    );
+    y -= 16;
+    fila("Bruto", money(datos.pagoPendienteBruto));
+    fila("INSS laboral (7%)", "− " + money(datos.pagoPendienteInss));
+    fila("IR retenido", "− " + money(datos.pagoPendienteIr));
+    fila("Neto pendiente", money(datos.pagoPendienteNeto), true);
+  }
+
   linea(false);
   fila("TOTAL A LIQUIDAR", money(datos.total), true);
   y -= 10;
