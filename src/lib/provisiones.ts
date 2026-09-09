@@ -20,7 +20,7 @@
 // ---------------------------------------------------------------------------
 
 import { prisma } from "@/lib/prisma";
-import { calcularIR, calcularPeriodo } from "@/lib/payroll";
+import { calcularIR, impuestoAnualSegunTabla, INSS_LABORAL } from "@/lib/payroll";
 
 export type TerminationTypeKey =
   | "RENUNCIA"
@@ -115,19 +115,26 @@ export interface DesglosePagoPendiente {
 
 /**
  * Retenciones sobre un pago pendiente al momento de la baja (una quincena que
- * no se alcanzó a planillar, un mes adicional, etc.). Se calcula con el mismo
- * método "proyección con el ingreso adicional" que ya usa payroll.ts para
- * horas extra/comisiones/retroactivos: se recalcula el INSS y el IR sobre el
- * salario mensual regular MÁS el pendiente, y la diferencia contra el INSS/IR
- * del salario regular solo es la retención que le corresponde al pendiente.
- * Así, si el pendiente empuja al colaborador a un tramo de IR más alto, esa
- * parte queda gravada correctamente en vez de tratarse como si fuera un
- * salario mensual aparte (lo que subestimaría el IR de un pago grande, como
- * un mes completo adicional).
+ * no se alcanzó a planillar, un mes adicional, una comisión, etc.), aplicando
+ * el Art. 23 de la Ley 822 correctamente para un pago ÚNICO (no recurrente):
  *
- * SIMPLIFICACIÓN: igual que con retroactivos, esta es una aproximación
- * razonable, no el método acumulativo exacto del Reglamento — un contador
- * debe confirmarla antes de liquidar un caso real.
+ * 1. INSS laboral 7% sobre el monto pendiente, como cualquier ingreso gravable.
+ * 2. Se suma la base del pendiente (ya sin INSS) UNA SOLA VEZ a la expectativa
+ *    de renta anual del colaborador — no doce veces. Sumarlo doce veces (como
+ *    si el pendiente se fuera a repetir cada mes) infla artificialmente la
+ *    proyección anual y puede hacerlo cruzar un tramo de IR que un pago único
+ *    real nunca cruzaría.
+ * 3. Se calcula el impuesto anual con esa expectativa ajustada y se le resta
+ *    el impuesto anual que ya le correspondía por su salario regular — esa
+ *    diferencia es el IR que genera el pendiente.
+ * 4. Como es un pago único y la relación laboral termina aquí, esa diferencia
+ *    se retiene COMPLETA en este pago — no se divide entre 12 meses (no hay
+ *    próximos meses en los que seguir cobrándola).
+ *
+ * SIMPLIFICACIÓN: esto asume que el pendiente es el único ingreso adicional
+ * del año para ese colaborador. Un contador debe confirmar el cálculo antes
+ * de liquidar un caso real, sobre todo si ya hubo otros pagos variables
+ * (horas extra, comisiones) en planillas anteriores de este mismo año.
  */
 export function calcularRetencionPagoPendiente(
   salarioMensualRegular: number,
@@ -137,10 +144,14 @@ export function calcularRetencionPagoPendiente(
     return { bruto: 0, inss: 0, ir: 0, neto: 0 };
   }
   const sinPendiente = calcularIR(salarioMensualRegular);
-  const conPendiente = calcularPeriodo({ bruto: salarioMensualRegular, retroactivos: pagoPendienteBruto });
 
-  const inss = round2(conPendiente.inssLaboral - sinPendiente.inssLaboral);
-  const ir = round2(conPendiente.irMensual - sinPendiente.irMensual);
+  const inss = round2(pagoPendienteBruto * INSS_LABORAL);
+  const baseImponiblePendiente = round2(pagoPendienteBruto - inss);
+  const expectativaAnualConPendiente = round2(sinPendiente.expectativaAnual + baseImponiblePendiente);
+
+  const irAnualConPendiente = impuestoAnualSegunTabla(expectativaAnualConPendiente);
+  const ir = round2(Math.max(irAnualConPendiente - sinPendiente.irAnual, 0));
+
   const neto = round2(pagoPendienteBruto - inss - ir);
   return { bruto: round2(pagoPendienteBruto), inss, ir, neto };
 }

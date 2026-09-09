@@ -55,14 +55,18 @@ export interface DesgloseIR {
  * No cubre: salario variable/comisiones, aguinaldo, vacaciones, indemnizaciones
  * ni doble empleador — esos casos requieren revisión manual (ver SupportCase).
  */
+/** Impuesto anual según la tarifa progresiva del Art. 23, sobre una expectativa de renta anual ya calculada. */
+export function impuestoAnualSegunTabla(expectativaAnual: number): number {
+  const tramo = TABLA_IR.find((t) => expectativaAnual <= t.hasta)!;
+  return round2(Math.max(tramo.base + (expectativaAnual - tramo.exceso) * tramo.tasa, 0));
+}
+
 export function calcularIR(brutoMensual: number): DesgloseIR {
   const inssLaboral = round2(brutoMensual * INSS_LABORAL);
   const baseImponibleMensual = round2(brutoMensual - inssLaboral);
   const expectativaAnual = round2(baseImponibleMensual * 12);
   const tramo = TABLA_IR.find((t) => expectativaAnual <= t.hasta)!;
-  const irAnual = round2(
-    Math.max(tramo.base + (expectativaAnual - tramo.exceso) * tramo.tasa, 0)
-  );
+  const irAnual = impuestoAnualSegunTabla(expectativaAnual);
   const irMensual = round2(irAnual / 12);
   const neto = round2(brutoMensual - inssLaboral - irMensual);
   return {

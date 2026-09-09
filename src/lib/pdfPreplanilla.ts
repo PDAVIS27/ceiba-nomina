@@ -204,8 +204,8 @@ export async function generarPDFLiquidacion(datos: {
     );
     y -= 16;
     fila("Bruto", money(datos.pagoPendienteBruto));
-    fila("INSS laboral (7%)", "− " + money(datos.pagoPendienteInss));
-    fila("IR retenido", "− " + money(datos.pagoPendienteIr));
+    fila("INSS laboral (7%)", "- " + money(datos.pagoPendienteInss));
+    fila("IR retenido", "- " + money(datos.pagoPendienteIr));
     fila("Neto pendiente", money(datos.pagoPendienteNeto), true);
   }
 
