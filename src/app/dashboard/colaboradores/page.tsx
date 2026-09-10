@@ -38,6 +38,7 @@ export default async function ColaboradoresPage() {
         <h3 className="font-serif text-lg font-semibold mb-4">Agregar colaborador</h3>
         <form action={addEmployee} className="flex flex-wrap gap-3 items-end">
           <Field name="fullName" label="Nombre completo" placeholder="Ej. Ana Reyes" />
+          <Field name="cedula" label="N° de cédula (opcional)" placeholder="001-010190-0001A" required={false} />
           <Field name="role" label="Puesto / Departamento" placeholder="Ej. Cajera" />
           <Field name="grossSalary" label="Salario bruto (C$)" type="number" placeholder="9200" />
           <Field name="startDate" label="Fecha de ingreso" type="date" />
@@ -70,7 +71,7 @@ export default async function ColaboradoresPage() {
                 <td className="py-3">
                   <div className="font-medium">{e.fullName}</div>
                   <div className="text-xs text-inkfaint">
-                    {e.role} {e.externalCode && `· ${e.externalCode}`}
+                    {e.role} {e.externalCode && `· ${e.externalCode}`} {e.cedula && `· ${e.cedula}`}
                   </div>
                 </td>
                 <td className="py-3 text-right font-mono">{money(d.bruto)}</td>
@@ -138,11 +139,23 @@ export default async function ColaboradoresPage() {
   );
 }
 
-function Field({ name, label, placeholder, type = "text" }: { name: string; label: string; placeholder?: string; type?: string }) {
+function Field({
+  name,
+  label,
+  placeholder,
+  type = "text",
+  required,
+}: {
+  name: string;
+  label: string;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+}) {
   return (
     <div>
       <label className="block text-xs text-inkdim mb-1.5">{label}</label>
-      <input name={name} type={type} required={type !== "date"} placeholder={placeholder}
+      <input name={name} type={type} required={required ?? type !== "date"} placeholder={placeholder}
         className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
     </div>
   );

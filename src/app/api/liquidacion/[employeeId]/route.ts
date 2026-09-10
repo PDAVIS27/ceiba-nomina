@@ -25,6 +25,7 @@ export async function GET(_req: Request, { params }: { params: { employeeId: str
   const bytes = await generarPDFLiquidacion({
     empresa: employee.company.name,
     colaborador: employee.fullName,
+    cedula: employee.cedula ?? undefined,
     puesto: employee.role,
     fechaIngreso: new Date(employee.startDate),
     fechaBaja: new Date(liq.terminatedAt),

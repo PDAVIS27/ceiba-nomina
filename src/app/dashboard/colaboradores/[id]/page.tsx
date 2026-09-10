@@ -69,7 +69,8 @@ export default async function ColaboradorDetallePage({
         <div>
           <h1 className="font-serif text-3xl font-semibold">{employee.fullName}</h1>
           <div className="text-inkfaint text-sm mt-1">
-            {employee.role} {employee.externalCode && `· ${employee.externalCode}`} · {antiguedadMeses} meses de antigüedad
+            {employee.role} {employee.externalCode && `· ${employee.externalCode}`}{" "}
+            {employee.cedula && `· Cédula ${employee.cedula}`} · {antiguedadMeses} meses de antigüedad
           </div>
         </div>
         {employee.active ? (

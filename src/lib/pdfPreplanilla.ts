@@ -107,6 +107,7 @@ export async function generarPDFComprobanteIndividual(datos: {
 export async function generarPDFLiquidacion(datos: {
   empresa: string;
   colaborador: string;
+  cedula?: string;
   puesto: string;
   fechaIngreso: Date;
   fechaBaja: Date;
@@ -185,6 +186,7 @@ export async function generarPDFLiquidacion(datos: {
   // ---------- Cuadro de datos del colaborador ----------
   const datosFilas: [string, string][] = [
     ["Colaborador", datos.colaborador],
+    ...(datos.cedula ? ([["N° de cédula", datos.cedula]] as [string, string][]) : []),
     ["Cargo", datos.puesto],
     ["Motivo de baja", datos.tipoBajaLabel],
     ["Fecha de ingreso", datos.fechaIngreso.toLocaleDateString("es-NI")],
@@ -256,15 +258,7 @@ export async function generarPDFLiquidacion(datos: {
 
   // ---------- Tabla de DEDUCCIONES ----------
   texto("DEDUCCIONES", margin, y, { size: 10, bold: true, color: GOLD });
-  y -= 13;
-  textoMultilinea(
-    `El INSS laboral (7%) y el IR se calculan UNA sola vez sobre vacaciones + pagos pendientes juntos (${money(datos.gravableBruto)} gravable) — el aguinaldo y la indemnización están exentos de ley y no forman parte de esta base.`,
-    margin,
-    tableRight - margin,
-    7.5,
-    DIM
-  );
-  y -= 3;
+  y -= 16;
 
   const deduccionFilas: { concepto: string; monto: string; bold?: boolean }[] = [
     { concepto: "Seguro Social (INSS 7%)", monto: "- " + money(datos.gravableInss) },
@@ -308,7 +302,7 @@ export async function generarPDFLiquidacion(datos: {
 
   // ---------- Constancia y firmas ----------
   textoMultilinea(
-    `Yo, ${datos.colaborador}, declaro haber recibido las prestaciones arriba descritas, a las cuales tenía derecho, y con las que doy por terminada mi relación laboral. Este documento es una aproximación generada por la plataforma a partir de las planillas aprobadas y los movimientos registrados — no sustituye la revisión de un contador o abogado laboral, especialmente en bajas disputadas o con conceptos no cubiertos por Ceiba (doble empleador, salario variable no planillado, etc.).`,
+    `Yo, ${datos.colaborador}, declaro haber recibido a mi entera satisfacción las prestaciones arriba descritas, a las cuales tenía derecho, y con las que doy por terminada totalmente mi relación laboral con ${datos.empresa.replace(/\.+$/, "")}. Declaro estar conforme con la presente liquidación y me comprometo a no presentar ningún reclamo posterior, ni personalmente ni por medio de representante, relacionado con dicha relación laboral.`,
     margin,
     tableRight - margin,
     8,

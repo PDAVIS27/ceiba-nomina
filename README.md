@@ -156,7 +156,14 @@ Desde la pantalla de detalle del colaborador puedes:
   - **Neto a recibir** = Total ingresos − Total deducciones.
 
   Todo el desglose queda en el PDF descargable de la liquidación, con las
-  mismas dos secciones.
+  mismas dos secciones, más una constancia de recibido con espacio para firma
+  del colaborador y de quien autoriza — sin explicaciones de cómo se calculó
+  cada cifra, solo el resultado.
+
+Al agregar un colaborador puedes indicar su **número de cédula** (opcional,
+en "Agregar colaborador"). Si lo llenas, aparece identificando al colaborador
+en el PDF de liquidación, igual que en un comprobante de liquidación
+tradicional.
 
 En cualquier PDF que generes (preplanilla, planilla aprobada, comprobante
 individual o liquidación), las columnas y secciones ahora están agrupadas y

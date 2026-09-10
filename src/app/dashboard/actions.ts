@@ -29,13 +29,14 @@ async function requireCompanyId(): Promise<string> {
 export async function addEmployee(formData: FormData) {
   const companyId = await requireCompanyId();
   const fullName = String(formData.get("fullName") || "").trim();
+  const cedula = String(formData.get("cedula") || "").trim();
   const role = String(formData.get("role") || "").trim();
   const grossSalary = Number(formData.get("grossSalary") || 0);
   const startDateRaw = String(formData.get("startDate") || "");
   const startDate = startDateRaw ? new Date(startDateRaw) : new Date();
   if (!fullName || !role || grossSalary <= 0) return;
   await prisma.employee.create({
-    data: { companyId, fullName, role, grossSalary, startDate },
+    data: { companyId, fullName, cedula: cedula || null, role, grossSalary, startDate },
   });
   redirect("/dashboard/colaboradores?ok=1");
 }

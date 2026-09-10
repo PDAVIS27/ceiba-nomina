@@ -61,6 +61,7 @@ model Employee {
   companyId    String
   company      Company    @relation(fields: [companyId], references: [id])
   externalCode String?
+  cedula       String?
   fullName     String
   role         String
   grossSalary  Decimal    @db.Decimal(12, 2)
