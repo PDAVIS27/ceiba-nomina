@@ -2,6 +2,8 @@ import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib";
 
 export interface FilaPDF {
   nombre: string;
+  codigo?: string | null;
+  cedula?: string | null;
   puesto: string;
   bruto: number;
   horasExtraCantidad: number;
@@ -31,6 +33,7 @@ export async function generarPDFComprobanteIndividual(datos: {
   empresa: string;
   periodo: string;
   colaborador: string;
+  cedula?: string | null;
   puesto: string;
   bruto: number;
   horasExtraCantidad: number;
@@ -81,7 +84,7 @@ export async function generarPDFComprobanteIndividual(datos: {
 
   texto(datos.colaborador, margin, y, { size: 11, bold: true });
   y -= 12;
-  texto(datos.puesto, margin, y, { size: 8, color: DIM });
+  texto(datos.puesto + (datos.cedula ? `  ·  Cédula ${datos.cedula}` : ""), margin, y, { size: 8, color: DIM });
   y -= 14;
   linea();
 
@@ -115,6 +118,8 @@ export async function generarPDFLiquidacion(datos: {
   tipoBajaLabel: string;
   aguinaldoPendiente: number;
   vacacionesPendientes: number;
+  horasExtraCantidad: number;
+  horasExtraMonto: number;
   aplicaIndemnizacion: boolean;
   indemnizacion: number;
   pagosPendientes: { concepto: string; monto: number }[];
@@ -225,6 +230,14 @@ export async function generarPDFLiquidacion(datos: {
   const ingresoFilas: { concepto: string; monto: string; bold?: boolean }[] = [
     { concepto: "Aguinaldo pendiente (exento)", monto: money(datos.aguinaldoPendiente) },
     { concepto: "Vacaciones pendientes (gravable)", monto: money(datos.vacacionesPendientes) },
+    ...(datos.horasExtraCantidad > 0
+      ? [
+          {
+            concepto: `Horas extra pendientes · ${datos.horasExtraCantidad} hrs (gravable)`,
+            monto: money(datos.horasExtraMonto),
+          },
+        ]
+      : []),
     {
       concepto: "Indemnización por antigüedad" + (datos.aplicaIndemnizacion ? " (exenta)" : ""),
       monto: datos.aplicaIndemnizacion ? money(datos.indemnizacion) : "No aplica",
@@ -337,20 +350,35 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
 
   const [pageWidth, pageHeight] = [PageSizes.Letter[1], PageSizes.Letter[0]]; // landscape
   const margin = 40;
-  const colX = {
-    nombre: margin,
-    bruto: margin + 175,
-    horas: margin + 275,
-    com: margin + 340,
-    retro: margin + 400,
-    via: margin + 460,
-    inss: margin + 520,
-    ir: margin + 575,
-    neto: margin + 630,
+  const tableRight = pageWidth - margin;
+
+  // Columnas: N° | Colaborador (+ puesto/código/cédula debajo) | montos.
+  // Los montos se alinean a la derecha dentro de cada columna, como en un
+  // comprobante de nómina tradicional (más fácil de sumar de un vistazo).
+  const colN = margin;
+  const colNombre = margin + 26;
+  const colBruto = margin + 176;
+  const colHoras = margin + 238;
+  const colCom = margin + 300;
+  const colRetro = margin + 356;
+  const colVia = margin + 412;
+  const colInss = margin + 470;
+  const colIr = margin + 528;
+  const colNeto = margin + 586;
+  const colRight = {
+    bruto: colHoras - 8,
+    horas: colCom - 8,
+    com: colRetro - 8,
+    retro: colVia - 8,
+    via: colInss - 8,
+    inss: colIr - 8,
+    ir: colNeto - 8,
+    neto: tableRight - 4,
   };
 
   let page = pdf.addPage([pageWidth, pageHeight]);
   let y = pageHeight - margin;
+  let filaIndex = 0;
 
   function nuevaPagina() {
     page = pdf.addPage([pageWidth, pageHeight]);
@@ -372,53 +400,52 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
       color: opts.color ?? INK,
     });
   }
+  function textoDer(t: string, xRight: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    const size = opts.size ?? 9;
+    const f = opts.bold ? fontBold : font;
+    texto(t, xRight - f.widthOfTextAtSize(t, size), yy, opts);
+  }
 
-  // ---------- Encabezado del documento ----------
+  // ---------- Encabezado del documento (tipo carta membretada) ----------
   texto("CEIBA", margin, y, { size: 20, bold: true, color: EMERALD });
+  textoDer(`Generado: ${datos.generadoEl.toLocaleString("es-NI")}`, tableRight, y + 5, { size: 8, color: DIM });
+  y -= 18;
   texto(
     datos.estado === "BORRADOR" ? "PREPLANILLA — PENDIENTE DE APROBACIÓN" : "PLANILLA APROBADA",
     margin,
-    y - 20,
+    y,
     { size: 12, bold: true, color: datos.estado === "BORRADOR" ? GOLD : EMERALD }
   );
-  y -= 42;
-  texto(`Negocio: ${datos.empresa}`, margin, y, { size: 10, bold: true });
-  y -= 15;
-  texto(`Período: ${datos.periodo}`, margin, y, { size: 10 });
-  y -= 15;
-  texto(
-    `Generado: ${datos.generadoEl.toLocaleString("es-NI")}` +
-      (datos.aprobadoEl ? `   ·   Aprobado: ${datos.aprobadoEl.toLocaleString("es-NI")}` : ""),
-    margin,
-    y,
-    { size: 9, color: DIM }
-  );
-  y -= 26;
+  if (datos.aprobadoEl) {
+    textoDer(`Aprobado: ${datos.aprobadoEl.toLocaleString("es-NI")}`, tableRight, y + 3, { size: 8, color: DIM });
+  }
+  y -= 20;
+  texto(datos.empresa, margin, y, { size: 11, bold: true });
+  textoDer(`Período: ${datos.periodo}`, tableRight, y + 2, { size: 9, color: DIM });
+  y -= 12;
+  page.drawLine({ start: { x: margin, y }, end: { x: tableRight, y }, thickness: 1.2, color: INK });
+  y -= 20;
 
   function dibujarEncabezadoTabla() {
     // Rótulo de grupo, para que quede claro de un vistazo qué columnas son
     // ingresos y cuáles son retenciones de ley.
-    texto("INGRESOS", colX.bruto, y, { size: 7, bold: true, color: EMERALD });
-    texto("RETENCIONES", colX.inss, y, { size: 7, bold: true, color: GOLD });
+    texto("INGRESOS", colBruto, y, { size: 7, bold: true, color: EMERALD });
+    texto("RETENCIONES", colInss, y, { size: 7, bold: true, color: GOLD });
     y -= 11;
 
-    texto("Colaborador", colX.nombre, y, { size: 8, bold: true, color: DIM });
-    texto("Bruto", colX.bruto, y, { size: 8, bold: true, color: DIM });
-    texto("H. extra", colX.horas, y, { size: 8, bold: true, color: DIM });
-    texto("Comis.", colX.com, y, { size: 8, bold: true, color: DIM });
-    texto("Retro.", colX.retro, y, { size: 8, bold: true, color: DIM });
-    texto("Viáticos", colX.via, y, { size: 8, bold: true, color: DIM });
-    texto("INSS", colX.inss, y, { size: 8, bold: true, color: DIM });
-    texto("IR", colX.ir, y, { size: 8, bold: true, color: DIM });
-    texto("Neto", colX.neto, y, { size: 8, bold: true, color: DIM });
+    texto("N°", colN, y, { size: 8, bold: true, color: DIM });
+    texto("Colaborador", colNombre, y, { size: 8, bold: true, color: DIM });
+    textoDer("Bruto", colRight.bruto, y, { size: 8, bold: true, color: DIM });
+    textoDer("H. extra", colRight.horas, y, { size: 8, bold: true, color: DIM });
+    textoDer("Comis.", colRight.com, y, { size: 8, bold: true, color: DIM });
+    textoDer("Retro.", colRight.retro, y, { size: 8, bold: true, color: DIM });
+    textoDer("Viáticos", colRight.via, y, { size: 8, bold: true, color: DIM });
+    textoDer("INSS", colRight.inss, y, { size: 8, bold: true, color: DIM });
+    textoDer("IR", colRight.ir, y, { size: 8, bold: true, color: DIM });
+    textoDer("Neto", colRight.neto, y, { size: 8, bold: true, color: DIM });
     y -= 6;
-    page.drawLine({
-      start: { x: margin, y },
-      end: { x: pageWidth - margin, y },
-      thickness: 0.75,
-      color: LINE,
-    });
-    y -= 14;
+    page.drawLine({ start: { x: margin, y }, end: { x: tableRight, y }, thickness: 0.75, color: LINE });
+    y -= 15;
   }
 
   dibujarEncabezadoTabla();
@@ -434,19 +461,38 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
 
   for (const f of datos.filas) {
     if (y < margin + 90) nuevaPagina();
+    filaIndex++;
 
-    texto(f.nombre.slice(0, 28), colX.nombre, y, { size: 9 });
-    texto(money(f.bruto), colX.bruto, y, { size: 8.5 });
-    texto(`${f.horasExtraCantidad}h/${money(f.horasExtraMonto)}`, colX.horas, y, { size: 7.5 });
-    texto(money(f.comisiones), colX.com, y, { size: 8.5 });
-    texto(money(f.retroactivos), colX.retro, y, { size: 8.5 });
-    texto(money(f.viaticos), colX.via, y, { size: 8.5 });
-    texto(money(f.inss), colX.inss, y, { size: 8.5 });
-    texto(money(f.ir), colX.ir, y, { size: 8.5 });
-    texto(money(f.neto), colX.neto, y, { size: 8.5, bold: true });
-    y -= 8;
-    texto(f.puesto.slice(0, 28), colX.nombre, y, { size: 7.5, color: DIM });
-    y -= 14;
+    // Franja de fondo alterna en filas pares — más fácil de seguir cada
+    // renglón en tablas con muchas columnas.
+    if (filaIndex % 2 === 0) {
+      page.drawRectangle({
+        x: margin - 4,
+        y: y - 16,
+        width: tableRight - margin + 8,
+        height: 22,
+        color: rgb(0.965, 0.973, 0.965),
+      });
+    }
+
+    texto(String(filaIndex), colN, y, { size: 8, color: DIM });
+    texto(f.nombre.slice(0, 26), colNombre, y, { size: 9 });
+    textoDer(money(f.bruto), colRight.bruto, y, { size: 8.5 });
+    textoDer(`${f.horasExtraCantidad}h · ${money(f.horasExtraMonto)}`, colRight.horas, y, { size: 7 });
+    textoDer(money(f.comisiones), colRight.com, y, { size: 8.5 });
+    textoDer(money(f.retroactivos), colRight.retro, y, { size: 8.5 });
+    textoDer(money(f.viaticos), colRight.via, y, { size: 8.5 });
+    textoDer(money(f.inss), colRight.inss, y, { size: 8.5 });
+    textoDer(money(f.ir), colRight.ir, y, { size: 8.5 });
+    textoDer(money(f.neto), colRight.neto, y, { size: 8.5, bold: true });
+    y -= 9;
+
+    let detalle = f.puesto.length > 24 ? f.puesto.slice(0, 23) + "…" : f.puesto;
+    if (f.codigo) detalle += ` · ${f.codigo}`;
+    if (f.cedula) detalle += ` · Cédula ${f.cedula}`;
+    if (detalle.length > 68) detalle = detalle.slice(0, 67) + "…";
+    texto(detalle, colNombre, y, { size: 7, color: DIM });
+    y -= 13;
 
     totBruto += f.bruto;
     totExtra += f.horasExtraMonto;
@@ -459,18 +505,18 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
   }
 
   y -= 4;
-  page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1, color: INK });
+  page.drawLine({ start: { x: margin, y }, end: { x: tableRight, y }, thickness: 1.2, color: INK });
   y -= 16;
 
-  texto("TOTALES", colX.nombre, y, { size: 9, bold: true });
-  texto(money(totBruto), colX.bruto, y, { size: 8.5, bold: true });
-  texto(money(totExtra), colX.horas, y, { size: 8.5, bold: true });
-  texto(money(totCom), colX.com, y, { size: 8.5, bold: true });
-  texto(money(totRetro), colX.retro, y, { size: 8.5, bold: true });
-  texto(money(totVia), colX.via, y, { size: 8.5, bold: true });
-  texto(money(totInss), colX.inss, y, { size: 8.5, bold: true });
-  texto(money(totIr), colX.ir, y, { size: 8.5, bold: true });
-  texto(money(totNeto), colX.neto, y, { size: 8.5, bold: true });
+  texto("TOTALES", colNombre, y, { size: 9, bold: true });
+  textoDer(money(totBruto), colRight.bruto, y, { size: 8.5, bold: true });
+  textoDer(money(totExtra), colRight.horas, y, { size: 8.5, bold: true });
+  textoDer(money(totCom), colRight.com, y, { size: 8.5, bold: true });
+  textoDer(money(totRetro), colRight.retro, y, { size: 8.5, bold: true });
+  textoDer(money(totVia), colRight.via, y, { size: 8.5, bold: true });
+  textoDer(money(totInss), colRight.inss, y, { size: 8.5, bold: true });
+  textoDer(money(totIr), colRight.ir, y, { size: 8.5, bold: true });
+  textoDer(money(totNeto), colRight.neto, y, { size: 8.5, bold: true });
   y -= 40;
 
   if (datos.estado === "BORRADOR") {

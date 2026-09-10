@@ -255,6 +255,15 @@ export default async function ColaboradorDetallePage({
               </div>
 
               <div className="w-full border-t border-line pt-3 mt-1">
+                <label className="block text-xs text-inkdim mb-1.5">Horas extra pendientes de pagar (opcional)</label>
+                <input name="horasExtra" type="number" min="0" step="0.5" placeholder="0"
+                  className="w-32 bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
+                <p className="text-inkfaint text-xs mt-1.5">
+                  Se calculan con el salario actual y el recargo del 100% (Art. 62/65 CT) — igual que en la planilla normal.
+                </p>
+              </div>
+
+              <div className="w-full border-t border-line pt-3 mt-1">
                 <p className="text-xs text-inkfaint mb-3">
                   Salarios que se le deben y todavía no se le han pagado (una quincena que no se alcanzó a
                   planillar, un mes adicional, una comisión, etc.) — opcional, puedes agregar varios.
@@ -301,6 +310,12 @@ export default async function ColaboradorDetallePage({
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
               <Detalle label="Aguinaldo pendiente (exento)" value={money(Number(liquidacion.aguinaldoPendiente))} />
               <Detalle label="Vacaciones pendientes (gravable)" value={money(Number(liquidacion.vacacionesPendientes))} />
+              {Number(liquidacion.horasExtraCantidad) > 0 && (
+                <Detalle
+                  label={`Horas extra pendientes · ${Number(liquidacion.horasExtraCantidad)} hrs (gravable)`}
+                  value={money(Number(liquidacion.horasExtraMonto))}
+                />
+              )}
               <Detalle
                 label="Indemnización (exenta)"
                 value={liquidacion.aplicaIndemnizacion ? money(Number(liquidacion.indemnizacion)) : "No aplica"}
@@ -318,7 +333,7 @@ export default async function ColaboradorDetallePage({
           {/* Deducciones: vacaciones + pagos pendientes se suman en UNA base gravable y la retención se calcula una sola vez sobre esa suma (aguinaldo e indemnización quedan fuera, están exentos). */}
           <div className="border-t border-line pt-4 mb-4">
             <div className="text-xs text-inkfaint uppercase font-mono mb-2">
-              Deducciones — INSS e IR calculados sobre vacaciones + pagos pendientes juntos
+              Deducciones — INSS e IR calculados sobre vacaciones + horas extra + pagos pendientes juntos
               ({money(Number(liquidacion.gravableBruto))} gravable)
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">

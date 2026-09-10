@@ -4,14 +4,15 @@ import { NextResponse } from "next/server";
 export async function GET() {
   const datos = [
     [
-      "Código colaborador", "Nombre del colaborador", "Departamento",
+      "N°", "Código colaborador", "Nombre del colaborador", "Departamento",
       "Salario mensual (C$)", "Horas extras", "Viáticos (C$)", "Retroactivos (C$)",
     ],
-    ["COL001", "Ana Reyes", "Cajera", 9200, 0, 0, 0],
-    ["COL002", "Carlos Espinoza", "Bodeguero", 8500, 5, 500, 0],
+    [1, "COL001", "Ana Reyes", "Cajera", 9200, 0, 0, 0],
+    [2, "COL002", "Carlos Espinoza", "Bodeguero", 8500, 5, 500, 0],
   ];
   const instrucciones = [
     ["Campo", "Descripción"],
+    ["N°", "Solo para tu referencia al llenar la hoja (numerar las filas) — la plataforma no la usa, puedes dejarla en blanco."],
     ["Código colaborador", "Identificador único del colaborador en tu empresa. Si ya existe, se actualiza; si no, se crea."],
     ["Nombre del colaborador", "Nombre completo."],
     ["Departamento", "Área, puesto o departamento del colaborador."],
@@ -23,7 +24,7 @@ export async function GET() {
 
   const wb = XLSX.utils.book_new();
   const ws1 = XLSX.utils.aoa_to_sheet(datos);
-  ws1["!cols"] = [{ wch: 16 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 16 }, { wch: 18 }];
+  ws1["!cols"] = [{ wch: 6 }, { wch: 16 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 16 }, { wch: 18 }];
   XLSX.utils.book_append_sheet(wb, ws1, "Datos de Nómina");
 
   const ws2 = XLSX.utils.aoa_to_sheet(instrucciones);

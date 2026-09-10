@@ -142,17 +142,19 @@ Desde la pantalla de detalle del colaborador puedes:
   de liquidación tradicional — **Ingresos** y **Deducciones**:
   - **Ingresos**: aguinaldo pendiente e indemnización por antigüedad (ambos
     EXENTOS de INSS e IR — Art. 97 y Art. 45 CT, se pagan íntegros), más
-    vacaciones pendientes y cualquier **pago pendiente** que agregues
-    (opcional, puedes agregar varios a la vez: una quincena que no se
-    alcanzó a planillar, un mes adicional, una comisión, etc. — ambos SÍ son
-    gravables).
-  - **Deducciones**: vacaciones pendientes y todos los pagos pendientes se
-    SUMAN en una sola base gravable (el aguinaldo y la indemnización quedan
-    fuera, por estar exentos) y el INSS laboral (7%) y el IR (Art. 23, Ley
-    822) se calculan UNA sola vez sobre esa base combinada — no una vez por
-    concepto — porque en la práctica se pagan juntos en el mismo cheque de
-    liquidación. Así también lo hacen los formatos de liquidación reales que
-    usan otras empresas.
+    vacaciones pendientes, **horas extra pendientes de pagar** (indicas
+    solo la cantidad de horas y la plataforma las valora con el salario
+    actual y el recargo del 100%, igual que en la planilla normal — Art.
+    62/65 CT) y cualquier **pago pendiente** que agregues (opcional, puedes
+    agregar varios a la vez: una quincena que no se alcanzó a planillar, un
+    mes adicional, una comisión, etc. — todos estos SÍ son gravables).
+  - **Deducciones**: vacaciones pendientes, horas extra pendientes y todos
+    los pagos pendientes se SUMAN en una sola base gravable (el aguinaldo y
+    la indemnización quedan fuera, por estar exentos) y el INSS laboral (7%)
+    y el IR (Art. 23, Ley 822) se calculan UNA sola vez sobre esa base
+    combinada — no una vez por concepto — porque en la práctica se pagan
+    juntos en el mismo cheque de liquidación. Así también lo hacen los
+    formatos de liquidación reales que usan otras empresas.
   - **Neto a recibir** = Total ingresos − Total deducciones.
 
   Todo el desglose queda en el PDF descargable de la liquidación, con las
@@ -162,8 +164,15 @@ Desde la pantalla de detalle del colaborador puedes:
 
 Al agregar un colaborador puedes indicar su **número de cédula** (opcional,
 en "Agregar colaborador"). Si lo llenas, aparece identificando al colaborador
-en el PDF de liquidación, igual que en un comprobante de liquidación
-tradicional.
+en el PDF de liquidación, en el comprobante de pago individual y en la
+preplanilla/planilla, igual que en un comprobante de liquidación tradicional.
+
+Los PDF de preplanilla y planilla (descargables desde Nómina → un período)
+tienen ahora un encabezado tipo carta membretada, franjas de color alternas
+por fila para seguir cada colaborador más fácil, columnas de montos alineadas
+a la derecha y una columna **N°** — la misma numeración que puedes usar en la
+plantilla de Excel para llevar tu propio control al llenarla (esa columna es
+solo para tu referencia; la plataforma no la usa).
 
 En cualquier PDF que generes (preplanilla, planilla aprobada, comprobante
 individual o liquidación), las columnas y secciones ahora están agrupadas y

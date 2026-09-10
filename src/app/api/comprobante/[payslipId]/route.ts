@@ -22,6 +22,7 @@ export async function GET(_req: Request, { params }: { params: { payslipId: stri
     empresa: ps.period.company.name,
     periodo: ps.period.label,
     colaborador: ps.employee.fullName,
+    cedula: ps.employee.cedula,
     puesto: ps.employee.role,
     bruto: Number(ps.grossSalary),
     horasExtraCantidad: Number(ps.horasExtraCantidad),

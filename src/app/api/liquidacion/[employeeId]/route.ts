@@ -33,6 +33,8 @@ export async function GET(_req: Request, { params }: { params: { employeeId: str
     tipoBajaLabel: TERMINATION_LABELS[tipo]?.label ?? tipo,
     aguinaldoPendiente: Number(liq.aguinaldoPendiente),
     vacacionesPendientes: Number(liq.vacacionesPendientes),
+    horasExtraCantidad: Number(liq.horasExtraCantidad),
+    horasExtraMonto: Number(liq.horasExtraMonto),
     aplicaIndemnizacion: liq.aplicaIndemnizacion,
     indemnizacion: Number(liq.indemnizacion),
     pagosPendientes: liq.pagosPendientes.map((p) => ({ concepto: p.concepto, monto: Number(p.monto) })),

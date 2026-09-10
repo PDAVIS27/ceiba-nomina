@@ -357,6 +357,10 @@ export async function darDeBaja(formData: FormData) {
     .map((concepto, i) => ({ concepto, monto: montosRaw[i] ?? 0 }))
     .filter((p) => p.monto > 0);
 
+  // Horas extra pendientes de pagar (se valoran con el salario actual del
+  // colaborador, con el mismo recargo del 100% que usa la planilla normal).
+  const horasExtraCantidad = Math.max(Number(formData.get("horasExtra")) || 0, 0);
+
   const employee = await getOwnEmployee(companyId, employeeId);
   if (!employee || !employee.active) return;
 
@@ -381,7 +385,7 @@ export async function darDeBaja(formData: FormData) {
   }
 
   const antiguedadMeses = mesesEntre(new Date(employee.startDate), terminatedAt);
-  const liq = await calcularLiquidacion(employeeId, terminationType, terminatedAt, pagosPendientes);
+  const liq = await calcularLiquidacion(employeeId, terminationType, terminatedAt, pagosPendientes, horasExtraCantidad);
 
   const datosComunes = {
     terminationType,
@@ -389,6 +393,8 @@ export async function darDeBaja(formData: FormData) {
     antiguedadMeses,
     aguinaldoPendiente: liq.aguinaldoSaldo,
     vacacionesPendientes: liq.vacacionesSaldo,
+    horasExtraCantidad: liq.horasExtraCantidad,
+    horasExtraMonto: liq.horasExtraMonto,
     aplicaIndemnizacion: liq.aplicaIndemnizacion,
     indemnizacion: liq.indemnizacion,
     gravableBruto: liq.gravable.bruto,

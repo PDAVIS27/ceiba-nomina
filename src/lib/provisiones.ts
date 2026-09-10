@@ -23,6 +23,7 @@
 import { prisma } from "@/lib/prisma";
 import {
   calcularIR,
+  calcularHorasExtra,
   provisionAguinaldoPorDias,
   provisionVacacionesPorDias,
   provisionIndemnizacionPorDias,
@@ -71,6 +72,9 @@ export function aplicaIndemnizacionPorTipo(tipo: TerminationTypeKey): boolean {
 }
 
 export interface BalanceProvisiones {
+  // Salario bruto mensual actual del colaborador — se usa para valorar horas
+  // extra pendientes al momento de la baja. 0 si el colaborador no existe.
+  salarioActual: number;
   aguinaldoAcumulado: number;
   aguinaldoPagado: number;
   aguinaldoSaldo: number;
@@ -155,6 +159,7 @@ export async function balanceProvisiones(employeeId: string, hasta: Date = new D
   );
 
   return {
+    salarioActual: employee ? Number(employee.grossSalary) : 0,
     aguinaldoAcumulado,
     aguinaldoPagado,
     aguinaldoSaldo: round2(Math.max(0, aguinaldoAcumulado - aguinaldoPagado)),
@@ -209,17 +214,22 @@ export interface PagoPendienteItem {
 export interface DesgloseLiquidacion extends BalanceProvisiones {
   aplicaIndemnizacion: boolean;
   indemnizacion: number;
+  // Horas extra pendientes de pagar al momento de la baja (Art. 62/65 CT,
+  // recargo del 100%) — valoradas con el salario actual del colaborador. El
+  // monto también forma parte de gravable.bruto, más abajo.
+  horasExtraCantidad: number;
+  horasExtraMonto: number;
   // Cada concepto de pago pendiente por separado, para mostrarlo desglosado
   // (el monto de cada uno también forma parte de gravable.bruto, más abajo).
   pagosPendientes: PagoPendienteItem[];
-  // Vacaciones pendientes (balance.vacacionesSaldo) MÁS todos los pagos
-  // pendientes, sumados en UNA sola base gravable — así se paga en la
-  // práctica un solo cheque de liquidación, y así lo calculan también los
-  // formatos reales de liquidación (ej. el de Grupo STT): el aguinaldo y la
-  // indemnización quedan FUERA de esta base porque están exentos de ley
-  // (Art. 97 y Art. 45 CT); vacaciones y pagos pendientes sí son gravables,
-  // se suman, y el INSS laboral (7%) y el IR se calculan UNA sola vez sobre
-  // ese total combinado — no por separado.
+  // Vacaciones pendientes (balance.vacacionesSaldo) + horas extra pendientes
+  // + todos los pagos pendientes, sumados en UNA sola base gravable — así se
+  // paga en la práctica un solo cheque de liquidación, y así lo calculan
+  // también los formatos reales de liquidación (ej. el de Grupo STT): el
+  // aguinaldo y la indemnización quedan FUERA de esta base porque están
+  // exentos de ley (Art. 97 y Art. 45 CT); vacaciones, horas extra y pagos
+  // pendientes sí son gravables, se suman, y el INSS laboral (7%) y el IR se
+  // calculan UNA sola vez sobre ese total combinado — no por separado.
   gravable: DesgloseRetencion;
   // Suma de TODOS los ingresos de la liquidación (exentos + gravables),
   // antes de cualquier retención — útil para mostrar un renglón de "Total
@@ -248,16 +258,19 @@ export async function calcularLiquidacion(
   employeeId: string,
   terminationType: TerminationTypeKey,
   terminatedAt: Date,
-  pagosPendientes: PagoPendienteItem[] = []
+  pagosPendientes: PagoPendienteItem[] = [],
+  horasExtraCantidad: number = 0
 ): Promise<DesgloseLiquidacion> {
   const balance = await balanceProvisiones(employeeId, terminatedAt);
   const aplicaIndemnizacion = aplicaIndemnizacionPorTipo(terminationType);
   const indemnizacion = aplicaIndemnizacion ? balance.indemnizacionAcumulada : 0;
 
+  const horasExtraMonto = round2(calcularHorasExtra(balance.salarioActual, Math.max(horasExtraCantidad, 0)));
+
   const pagoPendienteBrutoTotal = round2(
     pagosPendientes.reduce((a, p) => a + Math.max(p.monto, 0), 0)
   );
-  const gravableBruto = round2(balance.vacacionesSaldo + pagoPendienteBrutoTotal);
+  const gravableBruto = round2(balance.vacacionesSaldo + horasExtraMonto + pagoPendienteBrutoTotal);
   const gravable = calcularRetencionIndependiente(gravableBruto);
 
   const totalIngresos = round2(balance.aguinaldoSaldo + gravableBruto + indemnizacion);
@@ -267,6 +280,8 @@ export async function calcularLiquidacion(
     ...balance,
     aplicaIndemnizacion,
     indemnizacion,
+    horasExtraCantidad: Math.max(horasExtraCantidad, 0),
+    horasExtraMonto,
     pagosPendientes,
     gravable,
     totalIngresos,

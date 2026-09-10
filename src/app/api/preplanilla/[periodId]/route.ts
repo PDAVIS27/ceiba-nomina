@@ -29,6 +29,8 @@ export async function GET(_req: Request, { params }: { params: { periodId: strin
     aprobadoEl: period.approvedAt,
     filas: period.payslips.map((ps) => ({
       nombre: ps.employee.fullName,
+      codigo: ps.employee.externalCode,
+      cedula: ps.employee.cedula,
       puesto: ps.employee.role,
       bruto: Number(ps.grossSalary),
       horasExtraCantidad: Number(ps.horasExtraCantidad),
