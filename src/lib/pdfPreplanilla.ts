@@ -95,12 +95,12 @@ export async function generarPDFComprobanteIndividual(datos: {
   if (datos.horasExtraMonto > 0) fila(`Horas extra (${datos.horasExtraCantidad}h)`, money(datos.horasExtraMonto));
   if (datos.comisiones > 0) fila("Comisiones", money(datos.comisiones));
   if (datos.retroactivos > 0) fila("Retroactivos", money(datos.retroactivos));
-  if (datos.viaticos > 0) fila("Viáticos (no gravable)", money(datos.viaticos));
+  if (datos.viaticos > 0) fila("Viáticos", money(datos.viaticos));
 
   linea();
   texto("RETENCIONES", margin, y, { size: 7.5, bold: true, color: GOLD });
   y -= 14;
-  fila("INSS laboral (7%)", "- " + money(datos.inss));
+  fila("INSS laboral", "- " + money(datos.inss));
   fila("IR retenido", "- " + money(datos.ir));
   linea(false);
   fila("NETO A PAGAR", money(datos.neto), true);
@@ -436,13 +436,13 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
     type Concepto = { nombre: string; cantidad?: string; asignacion?: number; deduccion?: number };
     const conceptos: Concepto[] = [{ nombre: "Salario base", asignacion: f.bruto }];
     if (f.horasExtraMonto > 0) {
-      conceptos.push({ nombre: "Horas extra (recargo 100%, Art. 62/65 CT)", cantidad: `${f.horasExtraCantidad} h`, asignacion: f.horasExtraMonto });
+      conceptos.push({ nombre: "Horas extra", cantidad: `${f.horasExtraCantidad} h`, asignacion: f.horasExtraMonto });
     }
     if (f.comisiones > 0) conceptos.push({ nombre: "Comisiones", asignacion: f.comisiones });
     if (f.retroactivos > 0) conceptos.push({ nombre: "Retroactivos", asignacion: f.retroactivos });
-    if (f.viaticos > 0) conceptos.push({ nombre: "Viáticos (no gravable)", asignacion: f.viaticos });
-    conceptos.push({ nombre: "INSS laboral (7%)", deduccion: f.inss });
-    conceptos.push({ nombre: "IR retenido (Art. 23, Ley 822)", deduccion: f.ir });
+    if (f.viaticos > 0) conceptos.push({ nombre: "Viáticos", asignacion: f.viaticos });
+    conceptos.push({ nombre: "INSS laboral", cantidad: "7%", deduccion: f.inss });
+    conceptos.push({ nombre: "IR retenido", deduccion: f.ir });
 
     // Alto estimado del bloque completo, para decidir si cabe en lo que
     // queda de página antes de empezar a dibujarlo.
