@@ -138,16 +138,30 @@ Desde la pantalla de detalle del colaborador puedes:
   vacaciones tomadas** — ambos reducen el saldo acumulado pendiente.
 - **Dar de baja** a un colaborador: eliges la fecha y el tipo de baja
   (renuncia, despido con justa causa, despido sin causa, u otra causa ajena)
-  y la plataforma calcula la liquidación — aguinaldo y vacaciones pendientes
-  siempre (con el prorrateo por día ya incluido), e indemnización por
-  antigüedad SOLO cuando el tipo de baja corresponde (normalmente despido sin
-  causa u otra causa ajena, no en renuncia ni en despido con justa causa).
-  Opcionalmente puedes agregar un **pago pendiente** (una quincena que no se
-  alcanzó a planillar, un mes adicional, una comisión, etc.) — se le calcula
-  INSS laboral (7%) e IR según el Art. 23 de la Ley 822, evaluando ese monto
-  de forma independiente contra la tabla progresiva (igual que se evaluaría
-  un cheque aparte, no sumado al salario regular). Todo queda en un PDF
-  descargable.
+  y la plataforma calcula la liquidación:
+  - **Aguinaldo pendiente** — exento de INSS e IR (Art. 97 CT), se paga íntegro.
+  - **Vacaciones pendientes** — a diferencia del aguinaldo, SÍ paga INSS
+    laboral (7%) e IR al disfrutarse/pagarse (Art. 76-82 CT), así que la
+    plataforma le calcula la retención igual que a cualquier salario y lo
+    que se suma a la liquidación es el neto, no el bruto acumulado.
+  - **Indemnización por antigüedad** — SOLO cuando el tipo de baja
+    corresponde (normalmente despido sin causa u otra causa ajena, no en
+    renuncia ni en despido con justa causa); exenta de INSS e IR.
+  - **Pagos pendientes** (opcional, puedes agregar varios a la vez: una
+    quincena que no se alcanzó a planillar, un mes adicional, una comisión,
+    etc.) — como todos se pagan juntos en el mismo cheque de liquidación, se
+    SUMAN y la retención de INSS laboral e IR (Art. 23, Ley 822) se calcula
+    UNA sola vez sobre el total combinado, evaluado de forma independiente
+    contra la tabla progresiva (igual que se evaluaría un cheque aparte, no
+    sumado al salario regular).
+
+  Todo el desglose (bruto, INSS, IR y neto de cada concepto que aplica) queda
+  en el PDF descargable de la liquidación.
+
+En cualquier PDF que generes (preplanilla, planilla aprobada, comprobante
+individual o liquidación), las columnas y secciones ahora están agrupadas y
+rotuladas como **INGRESOS** y **RETENCIONES**, para que sea fácil identificar
+de un vistazo qué es lo que gana el colaborador y qué se le está reteniendo.
 
 ## Cosas que debes saber antes de vender esto
 

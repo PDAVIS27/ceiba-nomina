@@ -5,7 +5,12 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calcularPeriodo } from "@/lib/payroll";
 import { parsearExcelColaboradores } from "@/lib/bulkImport";
-import { calcularLiquidacion, TERMINATION_LABELS, type TerminationTypeKey } from "@/lib/provisiones";
+import {
+  calcularLiquidacion,
+  TERMINATION_LABELS,
+  type TerminationTypeKey,
+  type PagoPendienteItem,
+} from "@/lib/provisiones";
 import { redirect } from "next/navigation";
 
 import { mesesEntre } from "@/lib/dateUtils";
@@ -341,8 +346,15 @@ export async function darDeBaja(formData: FormData) {
   const terminatedAtRaw = String(formData.get("terminatedAt") || "");
   const note = String(formData.get("note") || "").trim() || null;
 
-  const pagoPendienteBruto = Number(formData.get("pagoPendienteBruto") || 0);
-  const pagoPendienteConcepto = String(formData.get("pagoPendienteConcepto") || "").trim() || null;
+  // Puede haber varios conceptos de pago pendiente a la vez (quincena, mes
+  // adicional, comisión, etc.) — cada fila del formulario manda un par
+  // ppConcepto/ppMonto; se emparejan por posición y se descartan los montos
+  // en cero (filas vacías que el colaborador nunca llenó).
+  const conceptosRaw = formData.getAll("ppConcepto").map((v) => String(v).trim());
+  const montosRaw = formData.getAll("ppMonto").map((v) => Number(v) || 0);
+  const pagosPendientes: PagoPendienteItem[] = conceptosRaw
+    .map((concepto, i) => ({ concepto, monto: montosRaw[i] ?? 0 }))
+    .filter((p) => p.monto > 0);
 
   const employee = await getOwnEmployee(companyId, employeeId);
   if (!employee || !employee.active) return;
@@ -359,16 +371,36 @@ export async function darDeBaja(formData: FormData) {
       )}`
     );
   }
-  if (pagoPendienteBruto > 0 && !pagoPendienteConcepto) {
+  if (pagosPendientes.some((p) => !p.concepto)) {
     redirect(
       `/dashboard/colaboradores/${employeeId}?error=${encodeURIComponent(
-        "Si agregas un pago pendiente, indica de qué se trata (ej. \"Quincena 1-15 sept\" o \"Mes adicional\")."
+        "Todo pago pendiente con un monto debe indicar de qué se trata (ej. \"Quincena 1-15 sept\" o \"Mes adicional\")."
       )}`
     );
   }
 
   const antiguedadMeses = mesesEntre(new Date(employee.startDate), terminatedAt);
-  const liq = await calcularLiquidacion(employeeId, terminationType, terminatedAt, pagoPendienteBruto);
+  const liq = await calcularLiquidacion(employeeId, terminationType, terminatedAt, pagosPendientes);
+
+  const datosComunes = {
+    terminationType,
+    terminatedAt,
+    antiguedadMeses,
+    aguinaldoPendiente: liq.aguinaldoSaldo,
+    vacacionesPendientes: liq.vacacionesSaldo,
+    vacacionesInss: liq.vacacionesRetencion.inss,
+    vacacionesIr: liq.vacacionesRetencion.ir,
+    vacacionesNeto: liq.vacacionesRetencion.neto,
+    aplicaIndemnizacion: liq.aplicaIndemnizacion,
+    indemnizacion: liq.indemnizacion,
+    pagoPendienteBruto: liq.pagoPendiente.bruto,
+    pagoPendienteInss: liq.pagoPendiente.inss,
+    pagoPendienteIr: liq.pagoPendiente.ir,
+    pagoPendienteNeto: liq.pagoPendiente.neto,
+    total: liq.total,
+    note,
+  };
+  const pagosPendientesData = pagosPendientes.map((p) => ({ concepto: p.concepto, monto: p.monto }));
 
   await prisma.$transaction([
     prisma.employee.update({
@@ -380,36 +412,18 @@ export async function darDeBaja(formData: FormData) {
       create: {
         employeeId,
         companyId,
-        terminationType,
-        terminatedAt,
-        antiguedadMeses,
-        aguinaldoPendiente: liq.aguinaldoSaldo,
-        vacacionesPendientes: liq.vacacionesSaldo,
-        aplicaIndemnizacion: liq.aplicaIndemnizacion,
-        indemnizacion: liq.indemnizacion,
-        pagoPendienteConcepto,
-        pagoPendienteBruto: liq.pagoPendiente.bruto,
-        pagoPendienteInss: liq.pagoPendiente.inss,
-        pagoPendienteIr: liq.pagoPendiente.ir,
-        pagoPendienteNeto: liq.pagoPendiente.neto,
-        total: liq.total,
-        note,
+        ...datosComunes,
+        pagosPendientes: { create: pagosPendientesData },
       },
       update: {
-        terminationType,
-        terminatedAt,
-        antiguedadMeses,
-        aguinaldoPendiente: liq.aguinaldoSaldo,
-        vacacionesPendientes: liq.vacacionesSaldo,
-        aplicaIndemnizacion: liq.aplicaIndemnizacion,
-        indemnizacion: liq.indemnizacion,
-        pagoPendienteConcepto,
-        pagoPendienteBruto: liq.pagoPendiente.bruto,
-        pagoPendienteInss: liq.pagoPendiente.inss,
-        pagoPendienteIr: liq.pagoPendiente.ir,
-        pagoPendienteNeto: liq.pagoPendiente.neto,
-        total: liq.total,
-        note,
+        ...datosComunes,
+        // Reemplaza los conceptos anteriores por los nuevos — no se puede
+        // dar de baja dos veces al mismo colaborador sin reingresarlo antes,
+        // pero por seguridad ante un reintento, se limpia y se vuelve a crear.
+        pagosPendientes: {
+          deleteMany: {},
+          create: pagosPendientesData,
+        },
       },
     }),
   ]);

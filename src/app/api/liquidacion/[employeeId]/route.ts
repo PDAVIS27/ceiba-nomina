@@ -12,7 +12,7 @@ export async function GET(_req: Request, { params }: { params: { employeeId: str
 
   const employee = await prisma.employee.findUnique({
     where: { id: params.employeeId },
-    include: { company: true, liquidacion: true },
+    include: { company: true, liquidacion: { include: { pagosPendientes: true } } },
   });
 
   if (!employee || employee.companyId !== companyId || !employee.liquidacion) {
@@ -32,9 +32,12 @@ export async function GET(_req: Request, { params }: { params: { employeeId: str
     tipoBajaLabel: TERMINATION_LABELS[tipo]?.label ?? tipo,
     aguinaldoPendiente: Number(liq.aguinaldoPendiente),
     vacacionesPendientes: Number(liq.vacacionesPendientes),
+    vacacionesInss: Number(liq.vacacionesInss),
+    vacacionesIr: Number(liq.vacacionesIr),
+    vacacionesNeto: Number(liq.vacacionesNeto),
     aplicaIndemnizacion: liq.aplicaIndemnizacion,
     indemnizacion: Number(liq.indemnizacion),
-    pagoPendienteConcepto: liq.pagoPendienteConcepto,
+    pagosPendientes: liq.pagosPendientes.map((p) => ({ concepto: p.concepto, monto: Number(p.monto) })),
     pagoPendienteBruto: Number(liq.pagoPendienteBruto),
     pagoPendienteInss: Number(liq.pagoPendienteInss),
     pagoPendienteIr: Number(liq.pagoPendienteIr),

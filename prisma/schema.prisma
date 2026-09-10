@@ -157,21 +157,45 @@ model Liquidacion {
   terminationType      TerminationType
   terminatedAt         DateTime
   antiguedadMeses      Int
-  aguinaldoPendiente   Decimal         @db.Decimal(12, 2)
+  aguinaldoPendiente   Decimal         @db.Decimal(12, 2) // exento de INSS/IR (Art. 97 CT) — se paga íntegro
+
+  // Vacaciones pendientes SÍ paga INSS laboral e IR (a diferencia del
+  // aguinaldo) al momento de disfrutarse/pagarse — vacacionesPendientes es
+  // el monto bruto acumulado; las retenciones se calculan igual que a
+  // cualquier salario (Art. 23 Ley 822) y lo que se suma al total es el neto.
   vacacionesPendientes Decimal         @db.Decimal(12, 2)
+  vacacionesInss       Decimal         @default(0) @db.Decimal(12, 2)
+  vacacionesIr         Decimal         @default(0) @db.Decimal(12, 2)
+  vacacionesNeto       Decimal         @default(0) @db.Decimal(12, 2)
+
   aplicaIndemnizacion  Boolean
   indemnizacion        Decimal         @db.Decimal(12, 2)
 
-  // Salario pendiente de pago al momento de la baja (quincena no pagada,
-  // mes adicional, etc.) — se le aplican INSS laboral e IR según Ley 822,
-  // igual que a cualquier otro ingreso gravable.
-  pagoPendienteConcepto String?
-  pagoPendienteBruto    Decimal        @default(0) @db.Decimal(12, 2)
-  pagoPendienteInss     Decimal        @default(0) @db.Decimal(12, 2)
-  pagoPendienteIr       Decimal        @default(0) @db.Decimal(12, 2)
-  pagoPendienteNeto     Decimal        @default(0) @db.Decimal(12, 2)
+  // Salarios pendientes de pago al momento de la baja (quincena no pagada,
+  // mes adicional, comisiones, etc. — ver LiquidacionPagoPendiente). Como
+  // todos se pagan juntos en el mismo cheque de liquidación, se SUMAN y la
+  // retención de INSS laboral e IR (Ley 822) se calcula UNA sola vez sobre
+  // el total combinado — estos cuatro campos son ese total agregado.
+  pagosPendientes    LiquidacionPagoPendiente[]
+  pagoPendienteBruto Decimal                    @default(0) @db.Decimal(12, 2)
+  pagoPendienteInss  Decimal                    @default(0) @db.Decimal(12, 2)
+  pagoPendienteIr    Decimal                    @default(0) @db.Decimal(12, 2)
+  pagoPendienteNeto  Decimal                    @default(0) @db.Decimal(12, 2)
 
   total                Decimal         @db.Decimal(12, 2)
   note                 String?
   createdAt            DateTime        @default(now())
+}
+
+// Un concepto individual de pago pendiente dentro de una liquidación (ej.
+// "Quincena 1-15 sept", "Comisión de agosto", "Mes adicional"). El monto
+// bruto de cada uno se guarda por separado para mostrarlo desglosado, pero
+// la retención de ley se calcula sobre la SUMA de todos (ver Liquidacion).
+model LiquidacionPagoPendiente {
+  id            String      @id @default(cuid())
+  liquidacionId String
+  liquidacion   Liquidacion @relation(fields: [liquidacionId], references: [id], onDelete: Cascade)
+  concepto      String
+  monto         Decimal     @db.Decimal(12, 2)
+  createdAt     DateTime    @default(now())
 }

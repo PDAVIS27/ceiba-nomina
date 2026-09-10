@@ -166,25 +166,30 @@ export async function balanceProvisiones(employeeId: string, hasta: Date = new D
   };
 }
 
-export interface DesglosePagoPendiente {
+export interface DesgloseRetencion {
   bruto: number;
   inss: number;
   ir: number;
   neto: number;
 }
 
+// Alias por compatibilidad con el nombre usado antes (un solo pago pendiente).
+export type DesglosePagoPendiente = DesgloseRetencion;
+
 /**
- * Retenciones sobre un pago pendiente al momento de la baja (una quincena que
- * no se alcanzó a planillar, un mes adicional, una comisión, etc.).
+ * Retenciones sobre un monto gravable que se paga como si fuera, él solo, el
+ * salario de un período — se usa tanto para el pago pendiente de la
+ * liquidación como para el saldo de vacaciones pendientes (ambos SÍ pagan
+ * INSS e IR al pagarse/disfrutarse, a diferencia del aguinaldo que está
+ * exento — Art. 97 vs Art. 76-82 CT).
  *
  * Se le aplica EXACTAMENTE la misma fórmula del Art. 23 (Ley 822) que a
  * cualquier salario mensual — la misma que usa calcularIR() para la planilla
- * normal — pero usando el monto gravable de este pago como si fuera, él
- * solo, el salario del período: INSS laboral 7%, base imponible, expectativa
- * de renta anual (base × 12) y tarifa progresiva sobre esa expectativa.
+ * normal —: INSS laboral 7%, base imponible, expectativa de renta anual
+ * (base × 12) y tarifa progresiva sobre esa expectativa.
  *
  * NO se combina con el salario regular del colaborador ni con lo que ya haya
- * ganado en el año: el pendiente se evalúa de forma independiente contra la
+ * ganado en el año: el monto se evalúa de forma independiente contra la
  * tabla, igual que se evaluaría un cheque aparte. Por eso montos pequeños
  * (una comisión de unos cientos de córdobas, por ejemplo) casi siempre caen
  * enteros en el tramo exento (hasta C$100,000 de expectativa anual) y no
@@ -197,42 +202,79 @@ export interface DesglosePagoPendiente {
  * plataforma no lleva ese acumulado interanual. Un contador debe confirmar
  * el cálculo antes de liquidar un caso real.
  */
-export function calcularRetencionPagoPendiente(pagoPendienteBruto: number): DesglosePagoPendiente {
-  if (pagoPendienteBruto <= 0) {
+export function calcularRetencionIndependiente(bruto: number): DesgloseRetencion {
+  if (bruto <= 0) {
     return { bruto: 0, inss: 0, ir: 0, neto: 0 };
   }
-  const d = calcularIR(pagoPendienteBruto);
-  return { bruto: round2(pagoPendienteBruto), inss: d.inssLaboral, ir: d.irMensual, neto: d.neto };
+  const d = calcularIR(bruto);
+  return { bruto: round2(bruto), inss: d.inssLaboral, ir: d.irMensual, neto: d.neto };
+}
+
+/** @deprecated usa calcularRetencionIndependiente — se deja este nombre para no romper otras referencias. */
+export function calcularRetencionPagoPendiente(pagoPendienteBruto: number): DesgloseRetencion {
+  return calcularRetencionIndependiente(pagoPendienteBruto);
+}
+
+export interface PagoPendienteItem {
+  concepto: string;
+  monto: number;
 }
 
 export interface DesgloseLiquidacion extends BalanceProvisiones {
   aplicaIndemnizacion: boolean;
   indemnizacion: number;
-  pagoPendiente: DesglosePagoPendiente;
+  // Vacaciones pendientes con su retención ya aplicada — vacacionesSaldo
+  // (heredado de BalanceProvisiones) sigue siendo el bruto acumulado;
+  // vacacionesRetencion.neto es lo que realmente se suma al total a pagar.
+  vacacionesRetencion: DesgloseRetencion;
+  // Cada concepto de pago pendiente por separado (para mostrarlo desglosado)
+  // y el combinado con la retención ya calculada sobre la suma de todos.
+  pagosPendientes: PagoPendienteItem[];
+  pagoPendiente: DesgloseRetencion;
   total: number;
 }
 
 /**
  * Calcula lo que corresponde pagarle a un colaborador si se le diera de baja
  * en `terminatedAt` con el tipo de terminación indicado, incluyendo
- * cualquier pago pendiente (quincena no planillada, mes adicional, etc.) con
- * sus retenciones de ley. Las provisiones se calculan CONGELADAS a esa fecha
- * (no a hoy), prorrateando por día el tramo desde la última planilla
- * aprobada. No escribe nada en la base de datos — eso lo hace la acción
- * darDeBaja al confirmar.
+ * cualquier pago pendiente (quincena no planillada, mes adicional, comisión,
+ * etc. — pueden ser varios conceptos a la vez) con sus retenciones de ley.
+ * Las provisiones se calculan CONGELADAS a esa fecha (no a hoy),
+ * prorrateando por día el tramo desde la última planilla aprobada. No
+ * escribe nada en la base de datos — eso lo hace la acción darDeBaja al
+ * confirmar.
+ *
+ * Los varios conceptos de pago pendiente se pagan juntos en el mismo cheque
+ * de liquidación, así que se SUMAN y la retención de Ley 822 se calcula UNA
+ * sola vez sobre el total combinado (no una vez por concepto) — así es como
+ * de verdad se pagaría en la práctica.
  */
 export async function calcularLiquidacion(
   employeeId: string,
   terminationType: TerminationTypeKey,
   terminatedAt: Date,
-  pagoPendienteBruto: number = 0
+  pagosPendientes: PagoPendienteItem[] = []
 ): Promise<DesgloseLiquidacion> {
   const balance = await balanceProvisiones(employeeId, terminatedAt);
   const aplicaIndemnizacion = aplicaIndemnizacionPorTipo(terminationType);
   const indemnizacion = aplicaIndemnizacion ? balance.indemnizacionAcumulada : 0;
-  const pagoPendiente = calcularRetencionPagoPendiente(pagoPendienteBruto);
-  const total = round2(balance.aguinaldoSaldo + balance.vacacionesSaldo + indemnizacion + pagoPendiente.neto);
-  return { ...balance, aplicaIndemnizacion, indemnizacion, pagoPendiente, total };
+  const vacacionesRetencion = calcularRetencionIndependiente(balance.vacacionesSaldo);
+  const pagoPendienteBrutoTotal = round2(
+    pagosPendientes.reduce((a, p) => a + Math.max(p.monto, 0), 0)
+  );
+  const pagoPendiente = calcularRetencionIndependiente(pagoPendienteBrutoTotal);
+  const total = round2(
+    balance.aguinaldoSaldo + vacacionesRetencion.neto + indemnizacion + pagoPendiente.neto
+  );
+  return {
+    ...balance,
+    aplicaIndemnizacion,
+    indemnizacion,
+    vacacionesRetencion,
+    pagosPendientes,
+    pagoPendiente,
+    total,
+  };
 }
 
 function round2(n: number): number {

@@ -5,6 +5,7 @@ import { balanceProvisiones, TERMINATION_LABELS } from "@/lib/provisiones";
 import { mesesEntre } from "@/lib/dateUtils";
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
+import PagosPendientesFields from "@/components/PagosPendientesFields";
 import {
   pagarAguinaldo,
   registrarVacacionesTomadas,
@@ -52,7 +53,10 @@ export default async function ColaboradorDetallePage({
       orderBy: { createdAt: "asc" },
     }),
     prisma.provisionMovement.findMany({ where: { employeeId: employee.id }, orderBy: { fecha: "desc" } }),
-    prisma.liquidacion.findUnique({ where: { employeeId: employee.id } }),
+    prisma.liquidacion.findUnique({
+      where: { employeeId: employee.id },
+      include: { pagosPendientes: true },
+    }),
   ]);
 
   const antiguedadMeses = mesesEntre(new Date(employee.startDate), fechaCorte);
@@ -251,20 +255,11 @@ export default async function ColaboradorDetallePage({
 
               <div className="w-full border-t border-line pt-3 mt-1">
                 <p className="text-xs text-inkfaint mb-3">
-                  Salario que se le debe y todavía no se le ha pagado (una quincena que no se alcanzó a planillar,
-                  un mes adicional, etc.) — opcional. Se le calcula INSS e IR igual que a cualquier salario.
+                  Salarios que se le deben y todavía no se le han pagado (una quincena que no se alcanzó a
+                  planillar, un mes adicional, una comisión, etc.) — opcional, puedes agregar varios.
                 </p>
               </div>
-              <div>
-                <label className="block text-xs text-inkdim mb-1.5">Concepto del pago pendiente</label>
-                <input name="pagoPendienteConcepto" placeholder='Ej. "Quincena 1-15 sept" o "Mes adicional"'
-                  className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm w-64" />
-              </div>
-              <div>
-                <label className="block text-xs text-inkdim mb-1.5">Monto bruto pendiente (C$)</label>
-                <input name="pagoPendienteBruto" type="number" min="0" step="0.01" defaultValue="0"
-                  className="w-36 bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
-              </div>
+              <PagosPendientesFields />
 
               <SubmitButton className="px-5 py-3 rounded-lg bg-lava text-white text-sm font-medium" pendingText="Calculando…">
                 Dar de baja y calcular liquidación
@@ -298,23 +293,42 @@ export default async function ColaboradorDetallePage({
             <Detalle label="Fecha de baja" value={new Date(liquidacion.terminatedAt).toLocaleDateString("es-NI")} />
             <Detalle label="Antigüedad" value={`${liquidacion.antiguedadMeses} meses`} />
             <Detalle label="Aguinaldo pendiente" value={money(Number(liquidacion.aguinaldoPendiente))} />
-            <Detalle label="Vacaciones pendientes" value={money(Number(liquidacion.vacacionesPendientes))} />
             <Detalle
               label="Indemnización"
               value={liquidacion.aplicaIndemnizacion ? money(Number(liquidacion.indemnizacion)) : "No aplica"}
             />
           </div>
 
-          {Number(liquidacion.pagoPendienteBruto) > 0 && (
+          <div className="border-t border-line pt-4 mb-4">
+            <div className="text-xs text-inkfaint uppercase font-mono mb-2">
+              Vacaciones pendientes — sí paga INSS e IR al disfrutarse (a diferencia del aguinaldo)
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
+              <Detalle label="Bruto" value={money(Number(liquidacion.vacacionesPendientes))} />
+              <Detalle label="INSS laboral (7%)" value={"− " + money(Number(liquidacion.vacacionesInss))} />
+              <Detalle label="IR retenido" value={"− " + money(Number(liquidacion.vacacionesIr))} />
+              <Detalle label="Neto" value={money(Number(liquidacion.vacacionesNeto))} bold />
+            </div>
+          </div>
+
+          {liquidacion.pagosPendientes.length > 0 && (
             <div className="border-t border-line pt-4 mb-4">
-              <div className="text-xs text-inkfaint uppercase font-mono mb-2">
-                Pago pendiente{liquidacion.pagoPendienteConcepto && ` — ${liquidacion.pagoPendienteConcepto}`}
+              <div className="text-xs text-inkfaint uppercase font-mono mb-2">Pagos pendientes</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm mb-3">
+                {liquidacion.pagosPendientes.map((p) => (
+                  <Detalle key={p.id} label={p.concepto} value={money(Number(p.monto))} />
+                ))}
+              </div>
+              <div className="text-[11px] text-inkfaint mb-2">
+                {liquidacion.pagosPendientes.length > 1
+                  ? "Se pagan juntos en el mismo cheque, así que la retención se calculó una sola vez sobre el total:"
+                  : "Retención:"}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
-                <Detalle label="Bruto" value={money(Number(liquidacion.pagoPendienteBruto))} />
+                <Detalle label="Bruto total" value={money(Number(liquidacion.pagoPendienteBruto))} />
                 <Detalle label="INSS laboral (7%)" value={"− " + money(Number(liquidacion.pagoPendienteInss))} />
                 <Detalle label="IR retenido" value={"− " + money(Number(liquidacion.pagoPendienteIr))} />
-                <Detalle label="Neto pendiente" value={money(Number(liquidacion.pagoPendienteNeto))} />
+                <Detalle label="Neto pendiente" value={money(Number(liquidacion.pagoPendienteNeto))} bold />
               </div>
             </div>
           )}
@@ -354,11 +368,11 @@ function ProvStat({
   );
 }
 
-function Detalle({ label, value }: { label: string; value: string }) {
+function Detalle({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <div>
       <div className="text-inkfaint text-[11px] uppercase font-mono">{label}</div>
-      <div className="font-mono">{value}</div>
+      <div className={`font-mono ${bold ? "font-semibold text-ink" : ""}`}>{value}</div>
     </div>
   );
 }

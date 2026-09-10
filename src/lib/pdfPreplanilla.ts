@@ -47,7 +47,7 @@ export async function generarPDFComprobanteIndividual(datos: {
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   const pageWidth = 320;
-  const pageHeight = 520;
+  const pageHeight = 570;
   const margin = 24;
   const page = pdf.addPage([pageWidth, pageHeight]);
   let y = pageHeight - margin;
@@ -85,11 +85,17 @@ export async function generarPDFComprobanteIndividual(datos: {
   y -= 14;
   linea();
 
+  texto("INGRESOS", margin, y, { size: 7.5, bold: true, color: EMERALD });
+  y -= 14;
   fila("Salario bruto", money(datos.bruto));
   if (datos.horasExtraMonto > 0) fila(`Horas extra (${datos.horasExtraCantidad}h)`, money(datos.horasExtraMonto));
   if (datos.comisiones > 0) fila("Comisiones", money(datos.comisiones));
   if (datos.retroactivos > 0) fila("Retroactivos", money(datos.retroactivos));
   if (datos.viaticos > 0) fila("Viáticos (no gravable)", money(datos.viaticos));
+
+  linea();
+  texto("RETENCIONES", margin, y, { size: 7.5, bold: true, color: GOLD });
+  y -= 14;
   fila("INSS laboral (7%)", "- " + money(datos.inss));
   fila("IR retenido", "- " + money(datos.ir));
   linea(false);
@@ -108,9 +114,12 @@ export async function generarPDFLiquidacion(datos: {
   tipoBajaLabel: string;
   aguinaldoPendiente: number;
   vacacionesPendientes: number;
+  vacacionesInss: number;
+  vacacionesIr: number;
+  vacacionesNeto: number;
   aplicaIndemnizacion: boolean;
   indemnizacion: number;
-  pagoPendienteConcepto?: string | null;
+  pagosPendientes: { concepto: string; monto: number }[];
   pagoPendienteBruto: number;
   pagoPendienteInss: number;
   pagoPendienteIr: number;
@@ -122,7 +131,10 @@ export async function generarPDFLiquidacion(datos: {
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   const pageWidth = 320;
-  const pageHeight = 660;
+  // Página más alta ahora que el desglose de vacaciones tiene su propia
+  // sección (bruto/INSS/IR/neto), y más alta todavía con varios conceptos
+  // de pago pendiente que listar.
+  const pageHeight = 780 + Math.max(0, datos.pagosPendientes.length - 1) * 16;
   const margin = 24;
   const page = pdf.addPage([pageWidth, pageHeight]);
   let y = pageHeight - margin;
@@ -185,10 +197,19 @@ export async function generarPDFLiquidacion(datos: {
   textoMultilinea(datos.tipoBajaLabel, margin, pageWidth - margin * 2, 8, INK);
   linea();
 
-  fila("Aguinaldo pendiente", money(datos.aguinaldoPendiente));
-  fila("Vacaciones pendientes", money(datos.vacacionesPendientes));
+  fila("Aguinaldo pendiente (exento)", money(datos.aguinaldoPendiente));
+
+  linea();
+  texto("Vacaciones pendientes — INGRESO", margin, y, { size: 8, bold: true, color: INK });
+  y -= 16;
+  fila("Bruto", money(datos.vacacionesPendientes));
+  fila("INSS laboral (7%) — RETENCIÓN", "- " + money(datos.vacacionesInss));
+  fila("IR retenido — RETENCIÓN", "- " + money(datos.vacacionesIr));
+  fila("Neto de vacaciones", money(datos.vacacionesNeto), true);
+
+  linea();
   if (datos.aplicaIndemnizacion) {
-    fila("Indemnización por antigüedad", money(datos.indemnizacion));
+    fila("Indemnización por antigüedad (exenta)", money(datos.indemnizacion));
   } else {
     texto("Indemnización por antigüedad: no aplica", margin, y, { size: 8, color: DIM });
     y -= 16;
@@ -196,16 +217,18 @@ export async function generarPDFLiquidacion(datos: {
 
   if (datos.pagoPendienteBruto > 0) {
     linea();
-    texto(
-      `Pago pendiente${datos.pagoPendienteConcepto ? ` — ${datos.pagoPendienteConcepto}` : ""}`,
-      margin,
-      y,
-      { size: 8, bold: true, color: INK }
-    );
+    texto("Pagos pendientes — INGRESO", margin, y, { size: 8, bold: true, color: INK });
     y -= 16;
-    fila("Bruto", money(datos.pagoPendienteBruto));
-    fila("INSS laboral (7%)", "- " + money(datos.pagoPendienteInss));
-    fila("IR retenido", "- " + money(datos.pagoPendienteIr));
+    for (const p of datos.pagosPendientes) {
+      fila(p.concepto || "Sin concepto", money(p.monto));
+    }
+    if (datos.pagosPendientes.length > 1) {
+      texto("Retención calculada sobre el total combinado:", margin, y, { size: 7, color: DIM });
+      y -= 13;
+    }
+    fila("Bruto total", money(datos.pagoPendienteBruto));
+    fila("INSS laboral (7%) — RETENCIÓN", "- " + money(datos.pagoPendienteInss));
+    fila("IR retenido — RETENCIÓN", "- " + money(datos.pagoPendienteIr));
     fila("Neto pendiente", money(datos.pagoPendienteNeto), true);
   }
 
@@ -296,6 +319,12 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
   y -= 26;
 
   function dibujarEncabezadoTabla() {
+    // Rótulo de grupo, para que quede claro de un vistazo qué columnas son
+    // ingresos y cuáles son retenciones de ley.
+    texto("INGRESOS", colX.bruto, y, { size: 7, bold: true, color: EMERALD });
+    texto("RETENCIONES", colX.inss, y, { size: 7, bold: true, color: GOLD });
+    y -= 11;
+
     texto("Colaborador", colX.nombre, y, { size: 8, bold: true, color: DIM });
     texto("Bruto", colX.bruto, y, { size: 8, bold: true, color: DIM });
     texto("H. extra", colX.horas, y, { size: 8, bold: true, color: DIM });
