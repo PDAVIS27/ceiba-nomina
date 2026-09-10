@@ -173,28 +173,19 @@ export interface DesgloseRetencion {
   neto: number;
 }
 
-// Alias por compatibilidad con el nombre usado antes (un solo pago pendiente).
-export type DesglosePagoPendiente = DesgloseRetencion;
-
 /**
  * Retenciones sobre un monto gravable que se paga como si fuera, él solo, el
- * salario de un período — se usa tanto para el pago pendiente de la
- * liquidación como para el saldo de vacaciones pendientes (ambos SÍ pagan
- * INSS e IR al pagarse/disfrutarse, a diferencia del aguinaldo que está
- * exento — Art. 97 vs Art. 76-82 CT).
- *
- * Se le aplica EXACTAMENTE la misma fórmula del Art. 23 (Ley 822) que a
- * cualquier salario mensual — la misma que usa calcularIR() para la planilla
- * normal —: INSS laboral 7%, base imponible, expectativa de renta anual
- * (base × 12) y tarifa progresiva sobre esa expectativa.
+ * salario de un período — INSS laboral 7%, base imponible, expectativa de
+ * renta anual (base × 12) y tarifa progresiva del Art. 23 (Ley 822) sobre esa
+ * expectativa. Es EXACTAMENTE la misma fórmula que calcularIR() usa para la
+ * planilla normal.
  *
  * NO se combina con el salario regular del colaborador ni con lo que ya haya
  * ganado en el año: el monto se evalúa de forma independiente contra la
  * tabla, igual que se evaluaría un cheque aparte. Por eso montos pequeños
- * (una comisión de unos cientos de córdobas, por ejemplo) casi siempre caen
- * enteros en el tramo exento (hasta C$100,000 de expectativa anual) y no
- * generan IR, mientras que un monto grande (un mes completo adicional) se
- * grava igual que un mes normal de ese mismo salario.
+ * casi siempre caen enteros en el tramo exento (hasta C$100,000 de
+ * expectativa anual) y no generan IR, mientras que un monto grande se grava
+ * igual que un mes normal de ese mismo salario.
  *
  * SIMPLIFICACIÓN: si el colaborador ya tuvo otros ingresos variables altos
  * en planillas anteriores de este mismo año, el método acumulativo del
@@ -210,11 +201,6 @@ export function calcularRetencionIndependiente(bruto: number): DesgloseRetencion
   return { bruto: round2(bruto), inss: d.inssLaboral, ir: d.irMensual, neto: d.neto };
 }
 
-/** @deprecated usa calcularRetencionIndependiente — se deja este nombre para no romper otras referencias. */
-export function calcularRetencionPagoPendiente(pagoPendienteBruto: number): DesgloseRetencion {
-  return calcularRetencionIndependiente(pagoPendienteBruto);
-}
-
 export interface PagoPendienteItem {
   concepto: string;
   monto: number;
@@ -223,14 +209,22 @@ export interface PagoPendienteItem {
 export interface DesgloseLiquidacion extends BalanceProvisiones {
   aplicaIndemnizacion: boolean;
   indemnizacion: number;
-  // Vacaciones pendientes con su retención ya aplicada — vacacionesSaldo
-  // (heredado de BalanceProvisiones) sigue siendo el bruto acumulado;
-  // vacacionesRetencion.neto es lo que realmente se suma al total a pagar.
-  vacacionesRetencion: DesgloseRetencion;
-  // Cada concepto de pago pendiente por separado (para mostrarlo desglosado)
-  // y el combinado con la retención ya calculada sobre la suma de todos.
+  // Cada concepto de pago pendiente por separado, para mostrarlo desglosado
+  // (el monto de cada uno también forma parte de gravable.bruto, más abajo).
   pagosPendientes: PagoPendienteItem[];
-  pagoPendiente: DesgloseRetencion;
+  // Vacaciones pendientes (balance.vacacionesSaldo) MÁS todos los pagos
+  // pendientes, sumados en UNA sola base gravable — así se paga en la
+  // práctica un solo cheque de liquidación, y así lo calculan también los
+  // formatos reales de liquidación (ej. el de Grupo STT): el aguinaldo y la
+  // indemnización quedan FUERA de esta base porque están exentos de ley
+  // (Art. 97 y Art. 45 CT); vacaciones y pagos pendientes sí son gravables,
+  // se suman, y el INSS laboral (7%) y el IR se calculan UNA sola vez sobre
+  // ese total combinado — no por separado.
+  gravable: DesgloseRetencion;
+  // Suma de TODOS los ingresos de la liquidación (exentos + gravables),
+  // antes de cualquier retención — útil para mostrar un renglón de "Total
+  // ingresos" igual que en un comprobante de liquidación tradicional.
+  totalIngresos: number;
   total: number;
 }
 
@@ -244,10 +238,11 @@ export interface DesgloseLiquidacion extends BalanceProvisiones {
  * escribe nada en la base de datos — eso lo hace la acción darDeBaja al
  * confirmar.
  *
- * Los varios conceptos de pago pendiente se pagan juntos en el mismo cheque
- * de liquidación, así que se SUMAN y la retención de Ley 822 se calcula UNA
- * sola vez sobre el total combinado (no una vez por concepto) — así es como
- * de verdad se pagaría en la práctica.
+ * Vacaciones pendientes y los pagos pendientes se pagan juntos en el mismo
+ * cheque de liquidación, así que se SUMAN en una sola base gravable y la
+ * retención de Ley 822 se calcula UNA sola vez sobre ese total combinado (no
+ * una vez por concepto) — así es como de verdad se paga en la práctica, y
+ * así lo hacen los formatos reales de liquidación.
  */
 export async function calcularLiquidacion(
   employeeId: string,
@@ -258,21 +253,23 @@ export async function calcularLiquidacion(
   const balance = await balanceProvisiones(employeeId, terminatedAt);
   const aplicaIndemnizacion = aplicaIndemnizacionPorTipo(terminationType);
   const indemnizacion = aplicaIndemnizacion ? balance.indemnizacionAcumulada : 0;
-  const vacacionesRetencion = calcularRetencionIndependiente(balance.vacacionesSaldo);
+
   const pagoPendienteBrutoTotal = round2(
     pagosPendientes.reduce((a, p) => a + Math.max(p.monto, 0), 0)
   );
-  const pagoPendiente = calcularRetencionIndependiente(pagoPendienteBrutoTotal);
-  const total = round2(
-    balance.aguinaldoSaldo + vacacionesRetencion.neto + indemnizacion + pagoPendiente.neto
-  );
+  const gravableBruto = round2(balance.vacacionesSaldo + pagoPendienteBrutoTotal);
+  const gravable = calcularRetencionIndependiente(gravableBruto);
+
+  const totalIngresos = round2(balance.aguinaldoSaldo + gravableBruto + indemnizacion);
+  const total = round2(balance.aguinaldoSaldo + indemnizacion + gravable.neto);
+
   return {
     ...balance,
     aplicaIndemnizacion,
     indemnizacion,
-    vacacionesRetencion,
     pagosPendientes,
-    pagoPendiente,
+    gravable,
+    totalIngresos,
     total,
   };
 }

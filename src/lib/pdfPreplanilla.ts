@@ -114,27 +114,25 @@ export async function generarPDFLiquidacion(datos: {
   tipoBajaLabel: string;
   aguinaldoPendiente: number;
   vacacionesPendientes: number;
-  vacacionesInss: number;
-  vacacionesIr: number;
-  vacacionesNeto: number;
   aplicaIndemnizacion: boolean;
   indemnizacion: number;
   pagosPendientes: { concepto: string; monto: number }[];
-  pagoPendienteBruto: number;
-  pagoPendienteInss: number;
-  pagoPendienteIr: number;
-  pagoPendienteNeto: number;
+  // Base gravable = vacacionesPendientes + la suma de pagosPendientes —
+  // aguinaldo e indemnización quedan fuera, exentos de ley. El INSS y el IR
+  // se calculan UNA sola vez sobre gravableBruto, no por separado.
+  gravableBruto: number;
+  gravableInss: number;
+  gravableIr: number;
+  totalIngresos: number;
   total: number;
 }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  const pageWidth = 320;
-  // Página más alta ahora que el desglose de vacaciones tiene su propia
-  // sección (bruto/INSS/IR/neto), y más alta todavía con varios conceptos
-  // de pago pendiente que listar.
-  const pageHeight = 780 + Math.max(0, datos.pagosPendientes.length - 1) * 16;
+  const pageWidth = 340;
+  // Página más alta con varios conceptos de pago pendiente que listar.
+  const pageHeight = 620 + Math.max(0, datos.pagosPendientes.length - 1) * 16;
   const margin = 24;
   const page = pdf.addPage([pageWidth, pageHeight]);
   let y = pageHeight - margin;
@@ -171,10 +169,14 @@ export async function generarPDFLiquidacion(datos: {
     }
     y -= 12;
   }
-  function fila(label: string, valor: string, bold = false) {
-    texto(label, margin, y, { size: 9, color: bold ? INK : DIM, bold });
+  function fila(label: string, valor: string, bold = false, labelColor?: any) {
+    texto(label, margin, y, { size: 9, color: labelColor ?? (bold ? INK : DIM), bold });
     texto(valor, pageWidth - margin - font.widthOfTextAtSize(valor, 9), y, { size: 9, bold });
     y -= 16;
+  }
+  function seccion(titulo: string, color: any) {
+    texto(titulo, margin, y, { size: 8.5, bold: true, color });
+    y -= 15;
   }
 
   texto("LIQUIDACIÓN FINAL", margin, y, { size: 13, bold: true, color: EMERALD });
@@ -195,45 +197,41 @@ export async function generarPDFLiquidacion(datos: {
   fila("Antigüedad", `${datos.antiguedadMeses} meses`);
   fila("Tipo de baja", "");
   textoMultilinea(datos.tipoBajaLabel, margin, pageWidth - margin * 2, 8, INK);
-  linea();
+  linea(false);
 
+  // ---------- INGRESOS ----------
+  seccion("INGRESOS", EMERALD);
   fila("Aguinaldo pendiente (exento)", money(datos.aguinaldoPendiente));
-
-  linea();
-  texto("Vacaciones pendientes — INGRESO", margin, y, { size: 8, bold: true, color: INK });
-  y -= 16;
-  fila("Bruto", money(datos.vacacionesPendientes));
-  fila("INSS laboral (7%) — RETENCIÓN", "- " + money(datos.vacacionesInss));
-  fila("IR retenido — RETENCIÓN", "- " + money(datos.vacacionesIr));
-  fila("Neto de vacaciones", money(datos.vacacionesNeto), true);
-
-  linea();
+  fila("Vacaciones pendientes (gravable)", money(datos.vacacionesPendientes));
   if (datos.aplicaIndemnizacion) {
     fila("Indemnización por antigüedad (exenta)", money(datos.indemnizacion));
   } else {
-    texto("Indemnización por antigüedad: no aplica", margin, y, { size: 8, color: DIM });
-    y -= 16;
+    fila("Indemnización por antigüedad", "No aplica");
   }
+  for (const p of datos.pagosPendientes) {
+    fila(`${p.concepto || "Sin concepto"} (gravable)`, money(p.monto));
+  }
+  linea();
+  fila("TOTAL INGRESOS", money(datos.totalIngresos), true);
 
-  if (datos.pagoPendienteBruto > 0) {
-    linea();
-    texto("Pagos pendientes — INGRESO", margin, y, { size: 8, bold: true, color: INK });
-    y -= 16;
-    for (const p of datos.pagosPendientes) {
-      fila(p.concepto || "Sin concepto", money(p.monto));
-    }
-    if (datos.pagosPendientes.length > 1) {
-      texto("Retención calculada sobre el total combinado:", margin, y, { size: 7, color: DIM });
-      y -= 13;
-    }
-    fila("Bruto total", money(datos.pagoPendienteBruto));
-    fila("INSS laboral (7%) — RETENCIÓN", "- " + money(datos.pagoPendienteInss));
-    fila("IR retenido — RETENCIÓN", "- " + money(datos.pagoPendienteIr));
-    fila("Neto pendiente", money(datos.pagoPendienteNeto), true);
-  }
+  // ---------- DEDUCCIONES ----------
+  linea(false);
+  seccion("DEDUCCIONES", GOLD);
+  textoMultilinea(
+    `Sobre vacaciones + pagos pendientes juntos (${money(datos.gravableBruto)} gravable) — el aguinaldo y la indemnización están exentos de ley.`,
+    margin,
+    pageWidth - margin * 2,
+    7,
+    DIM
+  );
+  y -= 4;
+  fila("Seguro Social (INSS 7%)", "- " + money(datos.gravableInss));
+  fila("Impuesto sobre la renta (IR)", "- " + money(datos.gravableIr));
+  linea();
+  fila("TOTAL DEDUCCIONES", "- " + money(round2(datos.gravableInss + datos.gravableIr)), true);
 
   linea(false);
-  fila("TOTAL A LIQUIDAR", money(datos.total), true);
+  fila("NETO A RECIBIR", money(datos.total), true);
   y -= 10;
 
   textoMultilinea(
@@ -245,6 +243,10 @@ export async function generarPDFLiquidacion(datos: {
   );
 
   return pdf.save();
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 const INK = rgb(0.11, 0.14, 0.15);

@@ -138,25 +138,25 @@ Desde la pantalla de detalle del colaborador puedes:
   vacaciones tomadas** — ambos reducen el saldo acumulado pendiente.
 - **Dar de baja** a un colaborador: eliges la fecha y el tipo de baja
   (renuncia, despido con justa causa, despido sin causa, u otra causa ajena)
-  y la plataforma calcula la liquidación:
-  - **Aguinaldo pendiente** — exento de INSS e IR (Art. 97 CT), se paga íntegro.
-  - **Vacaciones pendientes** — a diferencia del aguinaldo, SÍ paga INSS
-    laboral (7%) e IR al disfrutarse/pagarse (Art. 76-82 CT), así que la
-    plataforma le calcula la retención igual que a cualquier salario y lo
-    que se suma a la liquidación es el neto, no el bruto acumulado.
-  - **Indemnización por antigüedad** — SOLO cuando el tipo de baja
-    corresponde (normalmente despido sin causa u otra causa ajena, no en
-    renuncia ni en despido con justa causa); exenta de INSS e IR.
-  - **Pagos pendientes** (opcional, puedes agregar varios a la vez: una
-    quincena que no se alcanzó a planillar, un mes adicional, una comisión,
-    etc.) — como todos se pagan juntos en el mismo cheque de liquidación, se
-    SUMAN y la retención de INSS laboral e IR (Art. 23, Ley 822) se calcula
-    UNA sola vez sobre el total combinado, evaluado de forma independiente
-    contra la tabla progresiva (igual que se evaluaría un cheque aparte, no
-    sumado al salario regular).
+  y la plataforma calcula la liquidación en dos bloques, como un comprobante
+  de liquidación tradicional — **Ingresos** y **Deducciones**:
+  - **Ingresos**: aguinaldo pendiente e indemnización por antigüedad (ambos
+    EXENTOS de INSS e IR — Art. 97 y Art. 45 CT, se pagan íntegros), más
+    vacaciones pendientes y cualquier **pago pendiente** que agregues
+    (opcional, puedes agregar varios a la vez: una quincena que no se
+    alcanzó a planillar, un mes adicional, una comisión, etc. — ambos SÍ son
+    gravables).
+  - **Deducciones**: vacaciones pendientes y todos los pagos pendientes se
+    SUMAN en una sola base gravable (el aguinaldo y la indemnización quedan
+    fuera, por estar exentos) y el INSS laboral (7%) y el IR (Art. 23, Ley
+    822) se calculan UNA sola vez sobre esa base combinada — no una vez por
+    concepto — porque en la práctica se pagan juntos en el mismo cheque de
+    liquidación. Así también lo hacen los formatos de liquidación reales que
+    usan otras empresas.
+  - **Neto a recibir** = Total ingresos − Total deducciones.
 
-  Todo el desglose (bruto, INSS, IR y neto de cada concepto que aplica) queda
-  en el PDF descargable de la liquidación.
+  Todo el desglose queda en el PDF descargable de la liquidación, con las
+  mismas dos secciones.
 
 En cualquier PDF que generes (preplanilla, planilla aprobada, comprobante
 individual o liquidación), las columnas y secciones ahora están agrupadas y

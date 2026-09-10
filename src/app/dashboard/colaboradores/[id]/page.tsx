@@ -292,49 +292,47 @@ export default async function ColaboradorDetallePage({
             <Detalle label="Tipo de baja" value={TERMINATION_LABELS[liquidacion.terminationType as keyof typeof TERMINATION_LABELS]?.label ?? liquidacion.terminationType} />
             <Detalle label="Fecha de baja" value={new Date(liquidacion.terminatedAt).toLocaleDateString("es-NI")} />
             <Detalle label="Antigüedad" value={`${liquidacion.antiguedadMeses} meses`} />
-            <Detalle label="Aguinaldo pendiente" value={money(Number(liquidacion.aguinaldoPendiente))} />
-            <Detalle
-              label="Indemnización"
-              value={liquidacion.aplicaIndemnizacion ? money(Number(liquidacion.indemnizacion)) : "No aplica"}
-            />
           </div>
 
+          {/* Ingresos: todo lo que se le reconoce, exento y gravable, antes de retenciones. */}
+          <div className="border-t border-line pt-4 mb-4">
+            <div className="text-xs text-inkfaint uppercase font-mono mb-2">Ingresos</div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
+              <Detalle label="Aguinaldo pendiente (exento)" value={money(Number(liquidacion.aguinaldoPendiente))} />
+              <Detalle label="Vacaciones pendientes (gravable)" value={money(Number(liquidacion.vacacionesPendientes))} />
+              <Detalle
+                label="Indemnización (exenta)"
+                value={liquidacion.aplicaIndemnizacion ? money(Number(liquidacion.indemnizacion)) : "No aplica"}
+              />
+              {liquidacion.pagosPendientes.map((p) => (
+                <Detalle key={p.id} label={`${p.concepto} (gravable)`} value={money(Number(p.monto))} />
+              ))}
+            </div>
+            <div className="flex justify-between items-center mt-3 pt-3 border-t border-line/60">
+              <span className="text-xs text-inkdim">Total ingresos</span>
+              <span className="font-mono font-semibold">{money(Number(liquidacion.totalIngresos))}</span>
+            </div>
+          </div>
+
+          {/* Deducciones: vacaciones + pagos pendientes se suman en UNA base gravable y la retención se calcula una sola vez sobre esa suma (aguinaldo e indemnización quedan fuera, están exentos). */}
           <div className="border-t border-line pt-4 mb-4">
             <div className="text-xs text-inkfaint uppercase font-mono mb-2">
-              Vacaciones pendientes — sí paga INSS e IR al disfrutarse (a diferencia del aguinaldo)
+              Deducciones — INSS e IR calculados sobre vacaciones + pagos pendientes juntos
+              ({money(Number(liquidacion.gravableBruto))} gravable)
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
-              <Detalle label="Bruto" value={money(Number(liquidacion.vacacionesPendientes))} />
-              <Detalle label="INSS laboral (7%)" value={"− " + money(Number(liquidacion.vacacionesInss))} />
-              <Detalle label="IR retenido" value={"− " + money(Number(liquidacion.vacacionesIr))} />
-              <Detalle label="Neto" value={money(Number(liquidacion.vacacionesNeto))} bold />
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
+              <Detalle label="Seguro Social (INSS 7%)" value={"− " + money(Number(liquidacion.gravableInss))} />
+              <Detalle label="Impuesto sobre la renta (IR)" value={"− " + money(Number(liquidacion.gravableIr))} />
+              <Detalle
+                label="Total deducciones"
+                value={"− " + money(Number(liquidacion.gravableInss) + Number(liquidacion.gravableIr))}
+                bold
+              />
             </div>
           </div>
 
-          {liquidacion.pagosPendientes.length > 0 && (
-            <div className="border-t border-line pt-4 mb-4">
-              <div className="text-xs text-inkfaint uppercase font-mono mb-2">Pagos pendientes</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm mb-3">
-                {liquidacion.pagosPendientes.map((p) => (
-                  <Detalle key={p.id} label={p.concepto} value={money(Number(p.monto))} />
-                ))}
-              </div>
-              <div className="text-[11px] text-inkfaint mb-2">
-                {liquidacion.pagosPendientes.length > 1
-                  ? "Se pagan juntos en el mismo cheque, así que la retención se calculó una sola vez sobre el total:"
-                  : "Retención:"}
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
-                <Detalle label="Bruto total" value={money(Number(liquidacion.pagoPendienteBruto))} />
-                <Detalle label="INSS laboral (7%)" value={"− " + money(Number(liquidacion.pagoPendienteInss))} />
-                <Detalle label="IR retenido" value={"− " + money(Number(liquidacion.pagoPendienteIr))} />
-                <Detalle label="Neto pendiente" value={money(Number(liquidacion.pagoPendienteNeto))} bold />
-              </div>
-            </div>
-          )}
-
           <div className="pt-4 border-t border-line flex justify-between items-center">
-            <span className="text-sm text-inkdim">Total a liquidar</span>
+            <span className="text-sm text-inkdim">Neto a recibir</span>
             <span className="font-serif text-2xl font-semibold">{money(Number(liquidacion.total))}</span>
           </div>
           {liquidacion.note && <p className="text-inkfaint text-xs mt-3">Nota: {liquidacion.note}</p>}
