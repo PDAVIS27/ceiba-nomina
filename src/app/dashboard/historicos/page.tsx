@@ -6,6 +6,11 @@ import { aprobarPlanilla, eliminarBorrador } from "@/app/dashboard/actions";
 
 export const dynamic = "force-dynamic";
 
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
 export default async function HistoricosPage({
   searchParams,
 }: {
@@ -38,6 +43,38 @@ export default async function HistoricosPage({
     ? periods.find((p) => p.id === searchParams.periodo) ?? periods[0]
     : periods[0];
 
+  // ---------- Agrupar el histórico por año y mes ----------
+  // La fecha real del período (periodEnd/periodStart) manda; para períodos
+  // viejos creados antes de que existiera ese campo, se cae a createdAt —
+  // el mismo criterio que ya usa el histórico de provisiones.
+  const fechaDelPeriodo = (p: (typeof periods)[number]) => p.periodEnd ?? p.periodStart ?? p.createdAt;
+
+  const porAnio = new Map<number, Map<number, typeof periods>>();
+  for (const p of periods) {
+    const fecha = fechaDelPeriodo(p);
+    const anio = fecha.getFullYear();
+    const mes = fecha.getMonth();
+    if (!porAnio.has(anio)) porAnio.set(anio, new Map());
+    const porMes = porAnio.get(anio)!;
+    if (!porMes.has(mes)) porMes.set(mes, []);
+    porMes.get(mes)!.push(p);
+  }
+  const anios = Array.from(porAnio.keys()).sort((a, b) => b - a);
+
+  const netoDePeriodo = (p: (typeof periods)[number]) =>
+    p.payslips.reduce((acc, ps) => acc + Number(ps.netPay), 0);
+
+  const periodosAprobados = periods.filter((p) => p.status === "APROBADA");
+  const totalNetoHistorico = periodosAprobados.reduce((acc, p) => acc + netoDePeriodo(p), 0);
+  const colaboradoresDistintos = new Set(periods.flatMap((p) => p.payslips.map((ps) => ps.employeeId))).size;
+
+  const anioSeleccionado = selectedPeriod ? fechaDelPeriodo(selectedPeriod).getFullYear() : anios[0];
+  const totalesPorMes = Array.from({ length: 12 }, (_, mes) => {
+    const delMes = (porAnio.get(anioSeleccionado)?.get(mes) ?? []).filter((p) => p.status === "APROBADA");
+    return { mes, total: delMes.reduce((acc, p) => acc + netoDePeriodo(p), 0) };
+  });
+  const maxMes = Math.max(1, ...totalesPorMes.map((t) => t.total));
+
   return (
     <div>
       <h1 className="font-serif text-3xl font-semibold mb-8">Históricos de nómina</h1>
@@ -64,18 +101,90 @@ export default async function HistoricosPage({
 
       {periods.length > 0 && selectedPeriod && (
         <>
-          <div className="flex gap-2 flex-wrap mb-5">
-            {periods.map((p) => (
-              <a
-                key={p.id}
-                href={`/dashboard/historicos?periodo=${p.id}`}
-                className={`px-3 py-1.5 rounded-full text-xs font-mono border ${
-                  p.id === selectedPeriod.id ? "bg-gold text-[#1b1500] border-gold" : "border-linestrong text-inkdim"
-                }`}
-              >
-                {p.label}
-              </a>
-            ))}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <Stat label="Períodos guardados" value={String(periods.length)} />
+            <Stat
+              label="Años de historial"
+              value={anios.length === 1 ? String(anios[0]) : `${anios[anios.length - 1]}–${anios[0]}`}
+            />
+            <Stat label="Neto pagado (histórico)" value={money(totalNetoHistorico)} />
+            <Stat label="Colaboradores distintos" value={String(colaboradoresDistintos)} />
+          </div>
+
+          <div className="bg-panel border border-line rounded-xl p-5 mb-6">
+            <div className="text-xs text-inkfaint font-mono uppercase mb-3">
+              Neto pagado por mes · {anioSeleccionado} (planillas aprobadas)
+            </div>
+            <div className="space-y-1.5">
+              {totalesPorMes.map(({ mes, total }) => (
+                <div key={mes} className="flex items-center gap-3 text-xs">
+                  <div className="w-9 text-inkfaint font-mono shrink-0">{MESES[mes].slice(0, 3)}</div>
+                  <div className="flex-1 h-4 bg-bg rounded overflow-hidden">
+                    {total > 0 && (
+                      <div
+                        className="h-full bg-emerald rounded"
+                        style={{ width: `${Math.max(3, (total / maxMes) * 100)}%` }}
+                      />
+                    )}
+                  </div>
+                  <div className="w-28 text-right font-mono text-inkdim shrink-0">
+                    {total > 0 ? money(total) : "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2 mb-6">
+            {anios.map((anio) => {
+              const porMes = porAnio.get(anio)!;
+              const meses = Array.from(porMes.keys()).sort((a, b) => b - a);
+              const periodosDelAnio = meses.reduce((acc, m) => acc + porMes.get(m)!.length, 0);
+              const netoDelAnio = meses.reduce(
+                (acc, m) => acc + porMes.get(m)!.filter((p) => p.status === "APROBADA").reduce((a, p) => a + netoDePeriodo(p), 0),
+                0
+              );
+              return (
+                <details key={anio} open={anio === anioSeleccionado} className="bg-panel border border-line rounded-xl px-5 py-4 group">
+                  <summary className="flex justify-between items-center cursor-pointer list-none">
+                    <div className="flex items-baseline gap-3">
+                      <span className="font-serif text-xl font-semibold">{anio}</span>
+                      <span className="text-xs text-inkfaint font-mono">
+                        {periodosDelAnio} período{periodosDelAnio === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs font-mono text-inkdim">{money(netoDelAnio)} neto pagado</span>
+                      <span className="text-inkfaint text-xs group-open:rotate-180 transition-transform">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4 pt-4 border-t border-line space-y-3">
+                    {meses.map((mes) => (
+                      <div key={mes}>
+                        <div className="text-[11px] text-inkfaint uppercase font-mono mb-1.5">{MESES[mes]}</div>
+                        <div className="flex gap-2 flex-wrap">
+                          {porMes.get(mes)!.map((p) => (
+                            <a
+                              key={p.id}
+                              href={`/dashboard/historicos?periodo=${p.id}`}
+                              className={`px-3 py-1.5 rounded-full text-xs font-mono border ${
+                                p.id === selectedPeriod.id
+                                  ? "bg-gold text-[#1b1500] border-gold"
+                                  : p.status === "BORRADOR"
+                                    ? "border-gold/40 text-gold"
+                                    : "border-linestrong text-inkdim"
+                              }`}
+                            >
+                              {p.label}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
           </div>
 
           <section className="bg-panel border border-line rounded-xl p-6">
@@ -158,6 +267,15 @@ export default async function HistoricosPage({
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-panel border border-line rounded-xl px-4 py-3.5">
+      <div className="text-inkfaint text-[10px] uppercase font-mono tracking-wide">{label}</div>
+      <div className="font-serif text-xl font-semibold mt-1">{value}</div>
     </div>
   );
 }

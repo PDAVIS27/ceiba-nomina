@@ -108,6 +108,24 @@ En el panel del proyecto, ve a **Settings → Environment Variables** y agrega:
 
 ---
 
+## Históricos de nómina, agrupados por año y mes
+
+La pantalla de **Históricos** ahora abre con un resumen rápido (períodos
+guardados, años de historial, neto pagado en total y colaboradores
+distintos atendidos), seguido de una gráfica de barras simple con lo pagado
+mes a mes del año que estés viendo (solo planillas aprobadas).
+
+Debajo, los períodos ya no aparecen todos revueltos en una sola fila: están
+agrupados por **año** (el año más reciente abierto de una vez, los demás
+colapsados — clic para expandirlos) y dentro de cada año, por **mes**. Así,
+aunque pasen varios años usando Ceiba, siempre es fácil encontrar el período
+que buscas sin tener que hacer scroll por una lista larga. La fecha que se
+usa para agrupar es la fecha real del período (la que pones al correr la
+planilla); para períodos viejos que no la tenían guardada, se usa la fecha
+en que se creó el período como aproximación.
+
+---
+
 ## Histórico de provisiones y liquidación al dar de baja
 
 Cada vez que apruebas una planilla, la plataforma guarda cuánto se provisionó
