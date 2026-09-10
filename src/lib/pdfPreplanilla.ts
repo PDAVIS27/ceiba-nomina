@@ -130,15 +130,25 @@ export async function generarPDFLiquidacion(datos: {
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  const pageWidth = 340;
-  // Página más alta con varios conceptos de pago pendiente que listar.
-  const pageHeight = 620 + Math.max(0, datos.pagosPendientes.length - 1) * 16;
-  const margin = 24;
+  // Formato tipo "comprobante de liquidación" clásico: cuadro de datos del
+  // colaborador, tabla de ingresos con líneas de cuadrícula, tabla de
+  // deducciones, neto a recibir, y una constancia de recibido con firmas —
+  // carta tamaño completo (no un recibo angosto) para que quepa como tabla.
+  const pageWidth = PageSizes.Letter[0];
+  const pageHeight = PageSizes.Letter[1];
+  const margin = 46;
+  const tableLeft = margin;
+  const tableRight = pageWidth - margin;
   const page = pdf.addPage([pageWidth, pageHeight]);
   let y = pageHeight - margin;
 
   function texto(t: string, x: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
     page.drawText(t, { x, y: yy, size: opts.size ?? 9, font: opts.bold ? fontBold : font, color: opts.color ?? INK });
+  }
+  function textoDer(t: string, xRight: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    const size = opts.size ?? 9;
+    const f = opts.bold ? fontBold : font;
+    texto(t, xRight - f.widthOfTextAtSize(t, size), yy, opts);
   }
   function textoMultilinea(t: string, x: number, ancho: number, size = 7.5, color = DIM) {
     const palabras = t.split(" ");
@@ -158,89 +168,160 @@ export async function generarPDFLiquidacion(datos: {
       y -= size + 3;
     }
   }
-  function linea(punteada = true) {
-    y -= 4;
-    if (punteada) {
-      for (let x = margin; x < pageWidth - margin; x += 4) {
-        page.drawLine({ start: { x, y }, end: { x: x + 2, y }, thickness: 0.75, color: LINE });
-      }
-    } else {
-      page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1, color: INK });
-    }
-    y -= 12;
+  function hline(x1: number, x2: number, yy: number, color = LINE, thickness = 0.75) {
+    page.drawLine({ start: { x: x1, y: yy }, end: { x: x2, y: yy }, thickness, color });
   }
-  function fila(label: string, valor: string, bold = false, labelColor?: any) {
-    texto(label, margin, y, { size: 9, color: labelColor ?? (bold ? INK : DIM), bold });
-    texto(valor, pageWidth - margin - font.widthOfTextAtSize(valor, 9), y, { size: 9, bold });
-    y -= 16;
-  }
-  function seccion(titulo: string, color: any) {
-    texto(titulo, margin, y, { size: 8.5, bold: true, color });
-    y -= 15;
+  function vline(x: number, y1: number, y2: number, color = LINE, thickness = 0.75) {
+    page.drawLine({ start: { x, y: y1 }, end: { x, y: y2 }, thickness, color });
   }
 
-  texto("LIQUIDACIÓN FINAL", margin, y, { size: 13, bold: true, color: EMERALD });
-  y -= 18;
-  texto(datos.empresa, margin, y, { size: 9, bold: true });
+  // ---------- Encabezado ----------
+  texto("CÁLCULO DE LIQUIDACIÓN LABORAL", margin, y, { size: 14, bold: true, color: EMERALD });
+  textoDer(`Generado: ${new Date().toLocaleDateString("es-NI")}`, tableRight, y + 2, { size: 8, color: DIM });
+  y -= 20;
+  texto(datos.empresa, margin, y, { size: 10, color: DIM });
+  y -= 22;
+
+  // ---------- Cuadro de datos del colaborador ----------
+  const datosFilas: [string, string][] = [
+    ["Colaborador", datos.colaborador],
+    ["Cargo", datos.puesto],
+    ["Motivo de baja", datos.tipoBajaLabel],
+    ["Fecha de ingreso", datos.fechaIngreso.toLocaleDateString("es-NI")],
+    ["Fecha de liquidación", datos.fechaBaja.toLocaleDateString("es-NI")],
+    ["Antigüedad", `${datos.antiguedadMeses} meses`],
+  ];
+  const filaAltoDatos = 20;
+  const cuadroTop = y;
+  const cuadroBottom = y - datosFilas.length * filaAltoDatos;
+  const colDatosValor = margin + 150;
+  page.drawRectangle({
+    x: tableLeft,
+    y: cuadroBottom,
+    width: tableRight - tableLeft,
+    height: cuadroTop - cuadroBottom,
+    borderColor: LINE,
+    borderWidth: 1,
+  });
+  vline(colDatosValor, cuadroTop, cuadroBottom);
+  datosFilas.forEach(([label, valor], i) => {
+    const yy = cuadroTop - i * filaAltoDatos - 14;
+    texto(label, margin + 8, yy, { size: 9, color: DIM });
+    texto(valor, colDatosValor + 8, yy, { size: 9, bold: true });
+    if (i > 0) hline(tableLeft, tableRight, cuadroTop - i * filaAltoDatos);
+  });
+  y = cuadroBottom - 24;
+
+  // ---------- Tabla de INGRESOS ----------
+  texto("INGRESOS", margin, y, { size: 10, bold: true, color: EMERALD });
+  y -= 16;
+
+  const colConcepto = margin;
+  const colMonto = tableRight - 140;
+  const filaAlto = 19;
+
+  const ingresoFilas: { concepto: string; monto: string; bold?: boolean }[] = [
+    { concepto: "Aguinaldo pendiente (exento)", monto: money(datos.aguinaldoPendiente) },
+    { concepto: "Vacaciones pendientes (gravable)", monto: money(datos.vacacionesPendientes) },
+    {
+      concepto: "Indemnización por antigüedad" + (datos.aplicaIndemnizacion ? " (exenta)" : ""),
+      monto: datos.aplicaIndemnizacion ? money(datos.indemnizacion) : "No aplica",
+    },
+    ...datos.pagosPendientes.map((p) => ({
+      concepto: `${p.concepto || "Pago pendiente"} (gravable)`,
+      monto: money(p.monto),
+    })),
+    { concepto: "TOTAL INGRESOS", monto: money(datos.totalIngresos), bold: true },
+  ];
+
+  const ingresosTop = y;
+  ingresoFilas.forEach((f, i) => {
+    const yy = ingresosTop - i * filaAlto - 13;
+    texto(f.concepto, colConcepto + 6, yy, { size: 9, bold: f.bold, color: f.bold ? INK : undefined });
+    textoDer(f.monto, tableRight - 6, yy, { size: 9, bold: f.bold });
+  });
+  const ingresosBottom = ingresosTop - ingresoFilas.length * filaAlto;
+  page.drawRectangle({
+    x: tableLeft,
+    y: ingresosBottom,
+    width: tableRight - tableLeft,
+    height: ingresosTop - ingresosBottom,
+    borderColor: LINE,
+    borderWidth: 1,
+  });
+  vline(colMonto, ingresosTop, ingresosBottom);
+  for (let i = 1; i <= ingresoFilas.length; i++) hline(tableLeft, tableRight, ingresosTop - i * filaAlto);
+  hline(tableLeft, tableRight, ingresosTop - (ingresoFilas.length - 1) * filaAlto, INK, 1);
+  y = ingresosBottom - 24;
+
+  // ---------- Tabla de DEDUCCIONES ----------
+  texto("DEDUCCIONES", margin, y, { size: 10, bold: true, color: GOLD });
   y -= 13;
-  texto(`Generada: ${new Date().toLocaleString("es-NI")}`, margin, y, { size: 8, color: DIM });
-  linea();
-
-  texto(datos.colaborador, margin, y, { size: 11, bold: true });
-  y -= 12;
-  texto(datos.puesto, margin, y, { size: 8, color: DIM });
-  y -= 14;
-  linea();
-
-  fila("Fecha de ingreso", datos.fechaIngreso.toLocaleDateString("es-NI"));
-  fila("Fecha de baja", datos.fechaBaja.toLocaleDateString("es-NI"));
-  fila("Antigüedad", `${datos.antiguedadMeses} meses`);
-  fila("Tipo de baja", "");
-  textoMultilinea(datos.tipoBajaLabel, margin, pageWidth - margin * 2, 8, INK);
-  linea(false);
-
-  // ---------- INGRESOS ----------
-  seccion("INGRESOS", EMERALD);
-  fila("Aguinaldo pendiente (exento)", money(datos.aguinaldoPendiente));
-  fila("Vacaciones pendientes (gravable)", money(datos.vacacionesPendientes));
-  if (datos.aplicaIndemnizacion) {
-    fila("Indemnización por antigüedad (exenta)", money(datos.indemnizacion));
-  } else {
-    fila("Indemnización por antigüedad", "No aplica");
-  }
-  for (const p of datos.pagosPendientes) {
-    fila(`${p.concepto || "Sin concepto"} (gravable)`, money(p.monto));
-  }
-  linea();
-  fila("TOTAL INGRESOS", money(datos.totalIngresos), true);
-
-  // ---------- DEDUCCIONES ----------
-  linea(false);
-  seccion("DEDUCCIONES", GOLD);
   textoMultilinea(
-    `Sobre vacaciones + pagos pendientes juntos (${money(datos.gravableBruto)} gravable) — el aguinaldo y la indemnización están exentos de ley.`,
+    `El INSS laboral (7%) y el IR se calculan UNA sola vez sobre vacaciones + pagos pendientes juntos (${money(datos.gravableBruto)} gravable) — el aguinaldo y la indemnización están exentos de ley y no forman parte de esta base.`,
     margin,
-    pageWidth - margin * 2,
-    7,
+    tableRight - margin,
+    7.5,
     DIM
   );
-  y -= 4;
-  fila("Seguro Social (INSS 7%)", "- " + money(datos.gravableInss));
-  fila("Impuesto sobre la renta (IR)", "- " + money(datos.gravableIr));
-  linea();
-  fila("TOTAL DEDUCCIONES", "- " + money(round2(datos.gravableInss + datos.gravableIr)), true);
+  y -= 3;
 
-  linea(false);
-  fila("NETO A RECIBIR", money(datos.total), true);
-  y -= 10;
+  const deduccionFilas: { concepto: string; monto: string; bold?: boolean }[] = [
+    { concepto: "Seguro Social (INSS 7%)", monto: "- " + money(datos.gravableInss) },
+    { concepto: "Impuesto sobre la renta (IR)", monto: "- " + money(datos.gravableIr) },
+    { concepto: "TOTAL DEDUCCIONES", monto: "- " + money(round2(datos.gravableInss + datos.gravableIr)), bold: true },
+  ];
+  const deduccionesTop = y;
+  deduccionFilas.forEach((f, i) => {
+    const yy = deduccionesTop - i * filaAlto - 13;
+    texto(f.concepto, colConcepto + 6, yy, { size: 9, bold: f.bold });
+    textoDer(f.monto, tableRight - 6, yy, { size: 9, bold: f.bold });
+  });
+  const deduccionesBottom = deduccionesTop - deduccionFilas.length * filaAlto;
+  page.drawRectangle({
+    x: tableLeft,
+    y: deduccionesBottom,
+    width: tableRight - tableLeft,
+    height: deduccionesTop - deduccionesBottom,
+    borderColor: LINE,
+    borderWidth: 1,
+  });
+  vline(colMonto, deduccionesTop, deduccionesBottom);
+  for (let i = 1; i <= deduccionFilas.length; i++) hline(tableLeft, tableRight, deduccionesTop - i * filaAlto);
+  hline(tableLeft, tableRight, deduccionesTop - (deduccionFilas.length - 1) * filaAlto, INK, 1);
+  y = deduccionesBottom - 26;
 
+  // ---------- NETO A RECIBIR ----------
+  const netoAlto = 30;
+  page.drawRectangle({
+    x: tableLeft,
+    y: y - netoAlto,
+    width: tableRight - tableLeft,
+    height: netoAlto,
+    color: rgb(0.93, 0.96, 0.94),
+    borderColor: EMERALD,
+    borderWidth: 1,
+  });
+  texto("NETO A RECIBIR", colConcepto + 10, y - 20, { size: 11, bold: true, color: EMERALD });
+  textoDer(money(datos.total), tableRight - 10, y - 20, { size: 13, bold: true, color: EMERALD });
+  y -= netoAlto + 28;
+
+  // ---------- Constancia y firmas ----------
   textoMultilinea(
-    "Este cálculo es una aproximación generada por la plataforma a partir de las planillas aprobadas y los movimientos registrados. No sustituye la revisión de un contador o abogado laboral, especialmente en bajas disputadas o con conceptos no cubiertos por Ceiba (doble empleador, salario variable no planillado, etc.).",
+    `Yo, ${datos.colaborador}, declaro haber recibido las prestaciones arriba descritas, a las cuales tenía derecho, y con las que doy por terminada mi relación laboral. Este documento es una aproximación generada por la plataforma a partir de las planillas aprobadas y los movimientos registrados — no sustituye la revisión de un contador o abogado laboral, especialmente en bajas disputadas o con conceptos no cubiertos por Ceiba (doble empleador, salario variable no planillado, etc.).`,
     margin,
-    pageWidth - margin * 2,
-    7,
+    tableRight - margin,
+    8,
     DIM
   );
+  y -= 36;
+
+  const firmaAncho = (tableRight - tableLeft - 40) / 2;
+  hline(margin, margin + firmaAncho, y);
+  hline(tableRight - firmaAncho, tableRight, y);
+  texto("Recibí conforme", margin, y - 12, { size: 8, color: DIM });
+  texto(datos.colaborador, margin, y - 24, { size: 8 });
+  texto("Autorizado por", tableRight - firmaAncho, y - 12, { size: 8, color: DIM });
 
   return pdf.save();
 }
