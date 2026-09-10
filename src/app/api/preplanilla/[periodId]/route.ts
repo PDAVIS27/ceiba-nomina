@@ -31,6 +31,7 @@ export async function GET(_req: Request, { params }: { params: { periodId: strin
       nombre: ps.employee.fullName,
       codigo: ps.employee.externalCode,
       cedula: ps.employee.cedula,
+      fechaIngreso: ps.employee.startDate,
       puesto: ps.employee.role,
       bruto: Number(ps.grossSalary),
       horasExtraCantidad: Number(ps.horasExtraCantidad),

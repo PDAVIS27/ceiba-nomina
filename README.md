@@ -168,10 +168,13 @@ en el PDF de liquidación, en el comprobante de pago individual y en la
 preplanilla/planilla, igual que en un comprobante de liquidación tradicional.
 
 Los PDF de preplanilla y planilla (descargables desde Nómina → un período)
-tienen ahora un encabezado tipo carta membretada, franjas de color alternas
-por fila para seguir cada colaborador más fácil, columnas de montos alineadas
-a la derecha y una columna **N°** — la misma numeración que puedes usar en la
-plantilla de Excel para llevar tu propio control al llenarla (esa columna es
+ahora traen un bloque completo por colaborador — igual que un reporte de
+nómina tradicional — con sus datos (código, cédula, fecha de ingreso, cargo,
+sueldo) y su propio detalle de conceptos en columnas de **Asignación**
+(ingresos) y **Deducción** (retenciones), con el total neto de cada quien
+bien visible. Al final del documento queda el total de todo el período. La
+columna **N°** que agregaste a la plantilla de Excel es la misma numeración
+que puedes usar para llevar tu propio control al llenarla (esa columna es
 solo para tu referencia; la plataforma no la usa).
 
 En cualquier PDF que generes (preplanilla, planilla aprobada, comprobante
