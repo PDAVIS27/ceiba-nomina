@@ -9,8 +9,22 @@ export const dynamic = "force-dynamic";
 export default async function HistoricosPage({
   searchParams,
 }: {
-  searchParams: { periodo?: string; carga?: string; agregados?: string; omitidos?: string };
+  searchParams: {
+    periodo?: string;
+    carga?: string;
+    agregados?: string;
+    omitidos?: string;
+    omitidosDetalle?: string;
+  };
 }) {
+  let omitidosDetalle: string[] = [];
+  if (searchParams.omitidosDetalle) {
+    try {
+      omitidosDetalle = JSON.parse(searchParams.omitidosDetalle);
+    } catch {
+      omitidosDetalle = [];
+    }
+  }
   const session = await getServerSession(authOptions);
   const companyId = (session?.user as any)?.companyId as string;
 
@@ -32,6 +46,13 @@ export default async function HistoricosPage({
         <div className="bg-emerald/10 border border-emerald rounded-lg p-3 mb-6 text-sm">
           Se procesaron <strong>{searchParams.agregados}</strong> colaboradores desde el Excel.
           {Number(searchParams.omitidos) > 0 && <> Se omitieron {searchParams.omitidos} filas incompletas.</>}
+          {omitidosDetalle.length > 0 && (
+            <ul className="mt-2 ml-4 list-disc text-inkdim">
+              {omitidosDetalle.map((linea, i) => (
+                <li key={i}>{linea}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

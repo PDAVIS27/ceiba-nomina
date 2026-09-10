@@ -239,6 +239,11 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
   params.set("carga", "ok");
   params.set("agregados", String(filas.length));
   params.set("omitidos", String(errores.length));
+  // Detalle de a quién se le omitió y por qué (ej. "Juan Pérez: falta salario
+  // válido"), para no tener que adivinar revisando el Excel fila por fila.
+  if (errores.length > 0) {
+    params.set("omitidosDetalle", JSON.stringify(errores));
+  }
   redirect(`/dashboard/historicos?${params.toString()}`);
 }
 

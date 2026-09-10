@@ -117,7 +117,15 @@ export function parsearExcelColaboradores(buffer: ArrayBuffer): ResultadoImporta
     const grossSalary = numero(get("grossSalary"));
 
     if (!fullName || !role || !grossSalary || grossSalary <= 0) {
-      errores.push(`Fila ${i + 1}: falta nombre, departamento o un salario válido — se omitió.`);
+      const faltantes: string[] = [];
+      if (!fullName) faltantes.push("nombre");
+      if (!role) faltantes.push("departamento");
+      if (!grossSalary || grossSalary <= 0) faltantes.push("salario válido");
+      // Si al menos el nombre vino en la fila, lo usamos para identificar el
+      // error — así se sabe exactamente a quién corregirle el archivo, en
+      // vez de tener que ir a contar filas a mano.
+      const quien = fullName ? `"${fullName}"` : `Fila ${i + 1}`;
+      errores.push(`${quien}: falta ${faltantes.join(", ")} — se omitió.`);
       continue;
     }
 
