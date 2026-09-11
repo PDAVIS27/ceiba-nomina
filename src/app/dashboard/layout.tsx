@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import SignOutButton from "@/components/SignOutButton";
+import CeibaLogo from "@/components/CeibaLogo";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="min-h-screen bg-bg text-ink flex">
       <aside className="w-60 border-r border-line flex flex-col shrink-0">
         <div className="px-6 py-6 border-b border-line">
-          <div className="font-serif text-xl font-semibold">Ceiba</div>
+          <CeibaLogo size={24} />
           <div className="text-inkfaint text-xs font-mono mt-1 truncate">{company?.name}</div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">

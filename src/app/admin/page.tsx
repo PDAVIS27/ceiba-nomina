@@ -6,6 +6,7 @@ import SubmitButton from "@/components/SubmitButton";
 import IRSimulator from "@/components/IRSimulator";
 import crypto from "crypto";
 import { CATEGORIAS_PROBLEMA, etiquetaCategoria } from "@/lib/supportCategories";
+import CeibaLogo from "@/components/CeibaLogo";
 
 export const dynamic = "force-dynamic";
 
@@ -115,7 +116,10 @@ export default async function AdminPage({
     <main className="min-h-screen bg-bg text-ink px-6 py-10 max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="font-serif text-3xl font-semibold">Panel de proveedor</h1>
+          <div className="flex items-center gap-3 mb-1">
+            <CeibaLogo iconOnly size={28} />
+            <h1 className="font-serif text-3xl font-semibold">Panel de proveedor</h1>
+          </div>
           <div className="text-inkfaint text-xs font-mono mt-1">CEIBA · CUENTA ADMINISTRADORA</div>
         </div>
         <SignOutButton />

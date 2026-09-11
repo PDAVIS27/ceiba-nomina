@@ -1,11 +1,12 @@
 import Link from "next/link";
+import CeibaLogo from "@/components/CeibaLogo";
 
 export default function LandingPage() {
   return (
     <main className="min-h-screen">
       <nav className="border-b border-line sticky top-0 bg-bg/90 backdrop-blur">
         <div className="max-w-6xl mx-auto px-8 h-[72px] flex items-center justify-between">
-          <div className="font-serif text-xl font-semibold">Ceiba</div>
+          <CeibaLogo size={26} />
           <div className="flex gap-3">
             <Link href="/login" className="px-4 py-2 rounded-lg border border-linestrong text-sm hover:border-gold hover:text-gold transition">
               Iniciar sesión

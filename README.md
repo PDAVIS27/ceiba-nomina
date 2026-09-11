@@ -14,6 +14,25 @@ No necesitas saber programar para publicarla. Vas a usar solo páginas web
 
 ---
 
+## Marca
+
+Ceiba ya tiene ícono y logotipo — el ícono (la copa plana de la ceiba con un
+acento dorado) vive en `src/app/icon.svg` y Next.js lo usa automáticamente
+como favicon/ícono de la app en todas las páginas, sin configuración
+adicional. El componente `src/components/CeibaLogo.tsx` es el que dibuja el
+ícono junto al nombre "CEIBA" (fuente Fraunces, la misma de los títulos) y
+ya está puesto en la barra de la landing page, el menú del panel de negocio
+y el panel de proveedor:
+
+```tsx
+<CeibaLogo />                      // ícono + "CEIBA", para fondo oscuro
+<CeibaLogo variant="light" />      // para fondo claro (documentos impresos)
+<CeibaLogo iconOnly size={28} />   // solo el ícono
+<CeibaLogo direction="vertical" /> // apilado
+```
+
+---
+
 ## Antes de empezar
 
 Vas a crear dos cuentas gratuitas:
