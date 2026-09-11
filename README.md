@@ -21,15 +21,26 @@ acento dorado) vive en `src/app/icon.svg` y Next.js lo usa automáticamente
 como favicon/ícono de la app en todas las páginas, sin configuración
 adicional. El componente `src/components/CeibaLogo.tsx` es el que dibuja el
 ícono junto al nombre "CEIBA" (fuente Fraunces, la misma de los títulos) y
-ya está puesto en la barra de la landing page, el menú del panel de negocio
-y el panel de proveedor:
+ya está puesto en la barra de la landing page, el menú del panel de negocio,
+el panel de proveedor y la pantalla de inicio de sesión:
 
 ```tsx
 <CeibaLogo />                      // ícono + "CEIBA", para fondo oscuro
 <CeibaLogo variant="light" />      // para fondo claro (documentos impresos)
 <CeibaLogo iconOnly size={28} />   // solo el ícono
 <CeibaLogo direction="vertical" /> // apilado
+<CeibaLogo animated size={46} />   // con entrada animada — la copa "crece"
+                                   // y el acento dorado brilla; úsalo solo
+                                   // donde el logo es el protagonista del
+                                   // momento (login), no en usos repetidos
+                                   // como el sidebar
 ```
+
+El ícono también se dibuja como vector (no una imagen pegada) en el
+encabezado de **todos** los PDF que genera la plataforma — comprobante
+individual, cálculo de liquidación, preplanilla/planilla y listado de
+pago — incluidas las páginas siguientes de un documento largo, así que se
+ve nítido en cualquier zoom o impresión.
 
 ---
 
@@ -286,6 +297,19 @@ En cualquier PDF que generes (preplanilla, planilla aprobada, comprobante
 individual o liquidación), las columnas y secciones ahora están agrupadas y
 rotuladas como **INGRESOS** y **RETENCIONES**, para que sea fácil identificar
 de un vistazo qué es lo que gana el colaborador y qué se le está reteniendo.
+
+### Inicio: lo que debes pagar el próximo mes
+
+La pantalla de Inicio de cada negocio (`/dashboard`) ahora incluye, debajo
+de las tarjetas de resumen, un desglose de lo que le toca remitir a las
+autoridades el mes que viene: **INSS patronal** (el aporte del negocio
+como empleador), **INSS laboral** (lo retenido a los colaboradores) e
+**INATEC**, agrupados bajo "A la INSS" porque ambos se pagan juntos a esa
+institución; y por separado el **IR retenido**, bajo "A la DGI". El
+cálculo se estima con la planilla activa actual del negocio (sus
+colaboradores activos hoy), no con un período ya cerrado — por eso el
+texto aclara que hay que confirmar fechas límite y montos exactos con un
+contador antes de pagar.
 
 ## Cosas que debes saber antes de vender esto
 

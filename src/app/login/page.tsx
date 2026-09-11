@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import CeibaLogo from "@/components/CeibaLogo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,6 +36,9 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center px-5 bg-bg">
       <div className="w-full max-w-[400px] bg-panel border border-line rounded-2xl p-9 relative">
         <Link href="/" className="absolute top-5 left-6 text-xs text-inkfaint">← Volver</Link>
+        <div className="flex justify-center mb-6">
+          <CeibaLogo animated direction="vertical" size={46} />
+        </div>
         <div className="text-center mb-7">
           <div className="font-serif text-2xl font-semibold mb-1">Bienvenido de nuevo</div>
           <div className="text-inkdim text-sm">Entra con tu cuenta de Ceiba</div>

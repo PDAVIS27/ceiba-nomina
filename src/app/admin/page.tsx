@@ -106,7 +106,7 @@ export default async function AdminPage({
     conteoPorNombre[clave] = (conteoPorNombre[clave] || 0) + 1;
   }
   const periodosDuplicados = periods.filter(
-    (p) => conteoPorNombre[`${p.companyId}::${p.label.trim().toLowerCase()}`] > 1
+    (p: (typeof periods)[number]) => conteoPorNombre[`${p.companyId}::${p.label.trim().toLowerCase()}`] > 1
   );
 
   const openCases = cases.filter((c) => !c.resolved);

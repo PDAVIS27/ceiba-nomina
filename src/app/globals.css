@@ -23,3 +23,46 @@ html, body {
 }
 .receipt::before { top: -6px; }
 .receipt::after { bottom: -6px; transform: rotate(180deg); }
+
+/* ---------------------------------------------------------------------
+ * Animación de entrada del ícono de Ceiba — usada donde el logo es el
+ * protagonista del momento (ej. login), no en usos utilitarios como el
+ * sidebar. La copa "crece" en capas y el acento dorado queda con un brillo
+ * suave y continuo. Respeta prefers-reduced-motion.
+ * ------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  .ceiba-anim-icon .ceiba-part {
+    opacity: 0;
+    transform: scale(0.75) translateY(8px);
+    transform-origin: 50% 100%;
+    animation: ceiba-grow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  .ceiba-anim-icon .ceiba-part-trunk { animation-delay: 0s; }
+  .ceiba-anim-icon .ceiba-part-lobe1 { animation-delay: 0.14s; }
+  .ceiba-anim-icon .ceiba-part-lobe2 { animation-delay: 0.26s; }
+  .ceiba-anim-icon .ceiba-part-lobe3 { animation-delay: 0.38s; }
+  .ceiba-anim-icon .ceiba-part-bud {
+    animation:
+      ceiba-grow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+      ceiba-pulse 2.6s ease-in-out infinite;
+    animation-delay: 0.5s, 1.2s;
+  }
+  .ceiba-anim-word {
+    display: inline-block;
+    opacity: 0;
+    transform: translateX(-6px);
+    animation: ceiba-fade-in 0.5s ease-out forwards;
+    animation-delay: 0.55s;
+  }
+}
+
+@keyframes ceiba-grow {
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes ceiba-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(201, 162, 39, 0)); }
+  50% { filter: drop-shadow(0 0 5px rgba(201, 162, 39, 0.9)); }
+}
+@keyframes ceiba-fade-in {
+  to { opacity: 1; transform: translateX(0); }
+}

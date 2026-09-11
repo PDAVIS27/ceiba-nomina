@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calcularPeriodo, costoPatronalMensual, inssPatronalRate } from "@/lib/payroll";
+import { calcularPeriodo, costoPatronalMensual, inssPatronalRate, INATEC } from "@/lib/payroll";
 import { mesesEntre } from "@/lib/dateUtils";
 import Link from "next/link";
 
@@ -32,6 +32,17 @@ export default async function InicioPage() {
   const costoPatronal = costoPatronalMensual(totalBruto, employees.length);
   const tasaPatronal = inssPatronalRate(employees.length);
 
+  // Lo que el negocio debe remitir el mes que viene, según su planilla activa
+  // actual: INSS patronal (aporte del empleador) + INSS laboral (retenido a
+  // colaboradores) — ambos se pagan juntos a la INSS — más INATEC (Ley 90,
+  // también vía INSS), y por separado el IR retenido, que se declara y paga
+  // a la DGI.
+  const inssPatronalMonto = round2(totalBruto * tasaPatronal);
+  const inatecMonto = round2(totalBruto * INATEC);
+  const inssLaboralTotal = round2(rows.reduce((a, d) => a + d.inssLaboral, 0));
+  const irTotal = round2(rows.reduce((a, d) => a + d.irMensual, 0));
+  const totalInss = round2(inssPatronalMonto + inssLaboralTotal + inatecMonto);
+
   return (
     <div>
       <h1 className="font-serif text-3xl font-semibold mb-1">{company?.name ?? "Tu negocio"}</h1>
@@ -59,6 +70,48 @@ export default async function InicioPage() {
         <Stat label="Neto a pagar" value={money(totalNeto)} />
       </div>
 
+      {employees.length > 0 && (
+        <div className="mb-10">
+          <div className="flex items-baseline justify-between mb-3 flex-wrap gap-1">
+            <h2 className="font-serif text-xl font-semibold">Lo que debes pagar el próximo mes</h2>
+            <div className="text-inkfaint text-xs font-mono">Según tu planilla activa actual</div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="bg-panel border border-line rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-line bg-emerald/10 flex justify-between items-center">
+                <div className="font-serif font-semibold">INSS + INATEC</div>
+                <div className="text-inkfaint text-[10px] font-mono uppercase tracking-wide">A la INSS</div>
+              </div>
+              <div className="px-5 py-4">
+                <RowPago label="INSS patronal" sub={`${(tasaPatronal * 100).toFixed(1)}% sobre planilla bruta`} value={money(inssPatronalMonto)} />
+                <RowPago label="INSS laboral retenido" sub="7% retenido a colaboradores" value={money(inssLaboralTotal)} />
+                <RowPago label="INATEC" sub="2% sobre planilla bruta (Ley 90)" value={money(inatecMonto)} />
+                <div className="border-t border-line mt-3 pt-3 flex justify-between items-baseline">
+                  <span className="text-sm font-medium">Total a la INSS</span>
+                  <span className="font-serif text-lg font-semibold text-emerald">{money(totalInss)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="bg-panel border border-line rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-line bg-gold/10 flex justify-between items-center">
+                <div className="font-serif font-semibold">IR retenido</div>
+                <div className="text-inkfaint text-[10px] font-mono uppercase tracking-wide">A la DGI</div>
+              </div>
+              <div className="px-5 py-4">
+                <RowPago label="IR mensual retenido" sub="Art. 23, Ley 822 — retenido a colaboradores" value={money(irTotal)} />
+                <div className="border-t border-line mt-3 pt-3 flex justify-between items-baseline">
+                  <span className="text-sm font-medium">Total a la DGI</span>
+                  <span className="font-serif text-lg font-semibold text-gold">{money(irTotal)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="text-inkfaint text-xs mt-3">
+            Estimado según tus {employees.length} colaborador{employees.length === 1 ? "" : "es"} activo{employees.length === 1 ? "" : "s"} — confirma fechas límite y montos exactos con tu contador antes de pagar.
+          </div>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-4">
         <Atajo href="/dashboard/nomina" titulo="Correr nómina" texto="Genera una preplanilla nueva, a mano o desde Excel." />
         <Atajo href="/dashboard/colaboradores" titulo="Colaboradores" texto="Agrega, revisa o actualiza a tu equipo." />
@@ -80,6 +133,18 @@ function Stat({ label, value, accent, sub }: { label: string; value: string; acc
   );
 }
 
+function RowPago({ label, sub, value }: { label: string; sub: string; value: string }) {
+  return (
+    <div className="flex justify-between items-start gap-4 py-1.5">
+      <div>
+        <div className="text-sm">{label}</div>
+        <div className="text-inkfaint text-xs mt-0.5">{sub}</div>
+      </div>
+      <div className="font-mono text-sm shrink-0 tabular-nums">{value}</div>
+    </div>
+  );
+}
+
 function Atajo({ href, titulo, texto }: { href: string; titulo: string; texto: string }) {
   return (
     <Link href={href} className="bg-panel border border-line rounded-xl p-5 hover:border-gold transition block">
@@ -91,4 +156,8 @@ function Atajo({ href, titulo, texto }: { href: string; titulo: string; texto: s
 
 function money(n: number) {
   return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }

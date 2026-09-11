@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, PageSizes, type PDFPage } from "pdf-lib";
 
 export interface FilaPDF {
   nombre: string;
@@ -84,8 +84,11 @@ export async function generarPDFComprobanteIndividual(datos: {
     y -= 16;
   }
 
-  texto("COMPROBANTE DE PAGO", margin, y, { size: 13, bold: true, color: EMERALD });
-  y -= 18;
+  dibujarLogoCeiba(page, margin, y + 4, 16);
+  texto("CEIBA", margin + 20, y - 6, { size: 11, bold: true, color: EMERALD });
+  y -= 24;
+  texto("COMPROBANTE DE PAGO", margin, y, { size: 12, bold: true, color: INK });
+  y -= 16;
   texto(datos.empresa, margin, y, { size: 9, bold: true });
   y -= 13;
   texto(`Período: ${datos.periodo}`, margin, y, { size: 8, color: DIM });
@@ -194,8 +197,11 @@ export async function generarPDFLiquidacion(datos: {
   }
 
   // ---------- Encabezado ----------
+  dibujarLogoCeiba(page, margin, y + 6, 18);
+  texto("CEIBA", margin + 22, y - 4, { size: 12, bold: true, color: EMERALD });
+  textoDer(`Generado: ${new Date().toLocaleDateString("es-NI")}`, tableRight, y - 4, { size: 8, color: DIM });
+  y -= 26;
   texto("CÁLCULO DE LIQUIDACIÓN LABORAL", margin, y, { size: 14, bold: true, color: EMERALD });
-  textoDer(`Generado: ${new Date().toLocaleDateString("es-NI")}`, tableRight, y + 2, { size: 8, color: DIM });
   y -= 20;
   texto(datos.empresa, margin, y, { size: 10, color: DIM });
   y -= 22;
@@ -353,7 +359,31 @@ const INK = rgb(0.11, 0.14, 0.15);
 const DIM = rgb(0.42, 0.47, 0.46);
 const GOLD = rgb(0.61, 0.48, 0.12);
 const EMERALD = rgb(0.18, 0.42, 0.34);
+const EMERALDDEEP = rgb(0.1647, 0.3608, 0.2941); // #2a5c4b — lóbulo trasero + tronco del ícono
+const EMERALDLIGHT = rgb(0.3725, 0.6824, 0.5608); // #5fae8f — lóbulo frontal del ícono
 const LINE = rgb(0.85, 0.85, 0.82);
+
+/**
+ * Ícono de marca de Ceiba (misma silueta que src/app/icon.svg y
+ * CeibaLogo.tsx: tronco + tres lóbulos de copa superpuestos + acento
+ * dorado), dibujado directamente como vector — no un PNG rasterizado — para
+ * que se vea nítido en cualquier zoom o impresión.
+ *
+ * Los paths usan el mismo viewBox 0-100 del SVG original. pdf-lib voltea el
+ * eje Y de un SVG internamente al dibujarlo (ver drawSvgPath en pdf-lib), así
+ * que (x, y) equivale a la esquina superior izquierda de ese viewBox en
+ * coordenadas de página, y `size` es el lado en puntos que ocupa el
+ * viewBox de 100×100 completo (las figuras reales quedan un poco más
+ * angostas, entre x≈10-92 / y≈40-94, como en el SVG).
+ */
+function dibujarLogoCeiba(page: PDFPage, x: number, y: number, size: number) {
+  const s = size / 100;
+  page.drawSvgPath("M45,94 L55,94 L52,62 L48,62 Z", { x, y, scale: s, color: EMERALDDEEP });
+  page.drawSvgPath("M10,66 C10,44 90,44 90,66 Z", { x, y, scale: s, color: EMERALDDEEP });
+  page.drawSvgPath("M12,66 C12,40 64,40 64,66 Z", { x, y, scale: s, color: EMERALD });
+  page.drawSvgPath("M46,66 C46,42 92,42 92,66 Z", { x, y, scale: s, color: EMERALDLIGHT });
+  page.drawCircle({ x: x + 58 * s, y: y - 47 * s, size: 4.2 * s, color: GOLD });
+}
 
 /**
  * Preplanilla / planilla: un bloque por colaborador (identificación +
@@ -407,9 +437,10 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
   const colorEstado = datos.estado === "BORRADOR" ? GOLD : EMERALD;
 
   function encabezadoCompleto() {
-    texto("CEIBA", margin, y, { size: 20, bold: true, color: EMERALD });
+    dibujarLogoCeiba(page, margin, y + 4, 20);
+    texto("CEIBA", margin + 24, y - 8, { size: 16, bold: true, color: EMERALD });
     textoDer(`Generado: ${datos.generadoEl.toLocaleString("es-NI")}`, tableRight, y + 5, { size: 8, color: DIM });
-    y -= 18;
+    y -= 27;
     texto(tituloEstado, margin, y, { size: 12, bold: true, color: colorEstado });
     if (datos.aprobadoEl) {
       textoDer(`Aprobado: ${datos.aprobadoEl.toLocaleString("es-NI")}`, tableRight, y + 3, { size: 8, color: DIM });
@@ -422,7 +453,8 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
   }
 
   function encabezadoContinuacion() {
-    texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin, y, { size: 9, bold: true, color: DIM });
+    dibujarLogoCeiba(page, margin, y + 8, 12);
+    texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin + 16, y, { size: 9, bold: true, color: DIM });
     textoDer(tituloEstado, tableRight, y, { size: 8, bold: true, color: colorEstado });
     y -= 10;
     hline(tableLeft, tableRight, y);
@@ -631,9 +663,10 @@ export async function generarPDFListadoPago(datos: DatosListadoPagoPDF): Promise
 
   function encabezado(primeraPagina: boolean) {
     if (primeraPagina) {
-      texto("CEIBA", margin, y, { size: 20, bold: true, color: EMERALD });
+      dibujarLogoCeiba(page, margin, y + 4, 20);
+      texto("CEIBA", margin + 24, y - 8, { size: 16, bold: true, color: EMERALD });
       textoDer(`Generado: ${datos.generadoEl.toLocaleString("es-NI")}`, tableRight, y + 5, { size: 8, color: DIM });
-      y -= 18;
+      y -= 27;
       texto("LISTADO DE PAGO", margin, y, { size: 12, bold: true, color: EMERALD });
       textoDer(tituloEstado, tableRight, y + 2, { size: 8, bold: true, color: colorEstado });
       y -= 18;
@@ -642,7 +675,8 @@ export async function generarPDFListadoPago(datos: DatosListadoPagoPDF): Promise
       hline(tableLeft, tableRight, y, INK, 1.2);
       y -= 20;
     } else {
-      texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin, y, { size: 9, bold: true, color: DIM });
+      dibujarLogoCeiba(page, margin, y + 8, 12);
+      texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin + 16, y, { size: 9, bold: true, color: DIM });
       textoDer(tituloEstado, tableRight, y, { size: 8, bold: true, color: colorEstado });
       y -= 10;
       hline(tableLeft, tableRight, y);
