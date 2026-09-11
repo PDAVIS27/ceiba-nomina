@@ -26,6 +26,10 @@ export interface DatosPreplanillaPDF {
   generadoEl: Date;
   aprobadoEl?: Date | null;
   filas: FilaPDF[];
+  // "AGUINALDO" muestra un solo concepto por colaborador (el aguinaldo,
+  // exento de INSS/IR) en vez del desglose completo de nómina — para el pago
+  // especial de diciembre (ver generarPreplanillaAguinaldo en actions.ts).
+  tipoPeriodo?: "NOMINA" | "AGUINALDO";
 }
 
 function money(n: number): string {
@@ -396,7 +400,10 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
     page.drawLine({ start: { x: x1, y: yy }, end: { x: x2, y: yy }, thickness, color });
   }
 
-  const tituloEstado = datos.estado === "BORRADOR" ? "PREPLANILLA — NO VÁLIDO PARA PAGO" : "PLANILLA APROBADA";
+  const esAguinaldo = datos.tipoPeriodo === "AGUINALDO";
+  const tituloEstado = esAguinaldo
+    ? (datos.estado === "BORRADOR" ? "PREPLANILLA DE AGUINALDO — NO VÁLIDO PARA PAGO" : "PLANILLA DE AGUINALDO APROBADA")
+    : (datos.estado === "BORRADOR" ? "PREPLANILLA — NO VÁLIDO PARA PAGO" : "PLANILLA APROBADA");
   const colorEstado = datos.estado === "BORRADOR" ? GOLD : EMERALD;
 
   function encabezadoCompleto() {
@@ -441,17 +448,21 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
     // Conceptos que forman parte de esta liquidación de período (se omiten
     // los que no aplican, para no llenar el comprobante de ceros).
     type Concepto = { nombre: string; cantidad?: string; asignacion?: number; deduccion?: number };
-    const conceptos: Concepto[] = [{ nombre: "Salario base", asignacion: f.bruto }];
-    if (f.horasExtraMonto > 0) {
-      conceptos.push({ nombre: "Horas extra", cantidad: `${f.horasExtraCantidad} h`, asignacion: f.horasExtraMonto });
-    }
-    if (f.comisiones > 0) conceptos.push({ nombre: "Comisiones", asignacion: f.comisiones });
-    if (f.retroactivos > 0) conceptos.push({ nombre: "Retroactivos", asignacion: f.retroactivos });
-    if (f.viaticos > 0) conceptos.push({ nombre: "Viáticos", asignacion: f.viaticos });
-    conceptos.push({ nombre: "INSS laboral", cantidad: "7%", deduccion: f.inss });
-    conceptos.push({ nombre: "IR retenido", deduccion: f.ir });
-    if ((f.otrasDeducciones ?? 0) > 0) {
-      conceptos.push({ nombre: f.otrasDeduccionesConcepto || "Otras deducciones", deduccion: f.otrasDeducciones });
+    const conceptos: Concepto[] = esAguinaldo
+      ? [{ nombre: "Aguinaldo (exento de INSS/IR — Art. 97 CT)", asignacion: f.bruto }]
+      : [{ nombre: "Salario base", asignacion: f.bruto }];
+    if (!esAguinaldo) {
+      if (f.horasExtraMonto > 0) {
+        conceptos.push({ nombre: "Horas extra", cantidad: `${f.horasExtraCantidad} h`, asignacion: f.horasExtraMonto });
+      }
+      if (f.comisiones > 0) conceptos.push({ nombre: "Comisiones", asignacion: f.comisiones });
+      if (f.retroactivos > 0) conceptos.push({ nombre: "Retroactivos", asignacion: f.retroactivos });
+      if (f.viaticos > 0) conceptos.push({ nombre: "Viáticos", asignacion: f.viaticos });
+      conceptos.push({ nombre: "INSS laboral", cantidad: "7%", deduccion: f.inss });
+      conceptos.push({ nombre: "IR retenido", deduccion: f.ir });
+      if ((f.otrasDeducciones ?? 0) > 0) {
+        conceptos.push({ nombre: f.otrasDeduccionesConcepto || "Otras deducciones", deduccion: f.otrasDeducciones });
+      }
     }
 
     // Alto estimado del bloque completo, para decidir si cabe en lo que
@@ -526,7 +537,10 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
 
   // ---------- Totales del período ----------
   if (y < margin + (datos.estado === "BORRADOR" ? 100 : 40)) nuevaPagina();
-  texto(`TOTAL ${datos.estado === "BORRADOR" ? "PREPLANILLA" : "PLANILLA"} — ${datos.empresa}`, colConcepto, y, {
+  const etiquetaTotal = esAguinaldo
+    ? "AGUINALDO"
+    : (datos.estado === "BORRADOR" ? "PREPLANILLA" : "PLANILLA");
+  texto(`TOTAL ${etiquetaTotal} — ${datos.empresa}`, colConcepto, y, {
     size: 9.5,
     bold: true,
   });

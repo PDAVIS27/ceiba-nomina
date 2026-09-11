@@ -64,10 +64,6 @@ export default function LoginPage() {
             {loading ? "Entrando…" : "Entrar"}
           </button>
         </form>
-        <div className="text-center text-xs text-inkfaint mt-6">
-          ¿Primera vez configurando Ceiba?{" "}
-          <Link href="/setup" className="text-gold">Crear la cuenta de proveedor</Link>
-        </div>
       </div>
     </main>
   );

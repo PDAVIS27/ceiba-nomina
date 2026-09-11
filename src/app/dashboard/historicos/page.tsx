@@ -175,7 +175,7 @@ export default async function HistoricosPage({
                                     : "border-linestrong text-inkdim"
                               }`}
                             >
-                              {p.label}
+                              {p.tipo === "AGUINALDO" && "🎁 "}{p.label}
                             </a>
                           ))}
                         </div>
@@ -190,6 +190,7 @@ export default async function HistoricosPage({
           <section className="bg-panel border border-line rounded-xl p-6">
             <div className="flex justify-between items-center flex-wrap gap-3 mb-4">
               <div className="text-xs text-inkfaint font-mono">
+                {selectedPeriod.tipo === "AGUINALDO" && <span className="text-gold">🎁 AGUINALDO · </span>}
                 {selectedPeriod.label} · {selectedPeriod.payslips.length} comprobantes ·{" "}
                 <span className={selectedPeriod.status === "BORRADOR" ? "text-gold" : "text-emerald"}>
                   {selectedPeriod.status === "BORRADOR" ? "BORRADOR — pendiente de aprobación" : "APROBADA"}
@@ -200,14 +201,18 @@ export default async function HistoricosPage({
                   href={`/api/preplanilla/${selectedPeriod.id}`}
                   className="px-4 py-2 rounded-lg border border-linestrong text-xs text-inkdim hover:border-gold hover:text-gold transition"
                 >
-                  {selectedPeriod.status === "BORRADOR" ? "Descargar preplanilla (PDF)" : "Descargar planilla (PDF)"}
+                  {selectedPeriod.tipo === "AGUINALDO"
+                    ? (selectedPeriod.status === "BORRADOR" ? "Descargar preplanilla de aguinaldo (PDF)" : "Descargar planilla de aguinaldo (PDF)")
+                    : (selectedPeriod.status === "BORRADOR" ? "Descargar preplanilla (PDF)" : "Descargar planilla (PDF)")}
                 </a>
-                <a
-                  href={`/api/listado-pago/${selectedPeriod.id}`}
-                  className="px-4 py-2 rounded-lg border border-linestrong text-xs text-inkdim hover:border-gold hover:text-gold transition"
-                >
-                  Descargar listado de pago (PDF)
-                </a>
+                {selectedPeriod.status === "APROBADA" && (
+                  <a
+                    href={`/api/listado-pago/${selectedPeriod.id}`}
+                    className="px-4 py-2 rounded-lg border border-linestrong text-xs text-inkdim hover:border-gold hover:text-gold transition"
+                  >
+                    Descargar listado de pago (PDF)
+                  </a>
+                )}
                 {selectedPeriod.status === "BORRADOR" && (
                   <>
                     <form action={aprobarPlanilla}>
@@ -246,26 +251,33 @@ export default async function HistoricosPage({
                         <span className="text-inkfaint text-xs group-open:rotate-180 transition-transform">▾</span>
                       </div>
                     </summary>
-                    <div className="mt-4 pt-4 border-t border-line grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
-                      <Detalle label="Salario bruto" value={money(Number(ps.grossSalary))} />
-                      <Detalle label="Horas extra" value={`${Number(ps.horasExtraCantidad)} h · ${money(Number(ps.horasExtraMonto))}`} />
-                      <Detalle label="Comisiones" value={money(Number(ps.comisiones))} />
-                      <Detalle label="Retroactivos" value={money(Number(ps.retroactivos))} />
-                      <Detalle label="Viáticos (no gravable)" value={money(Number(ps.viaticos))} />
-                      <Detalle label="INSS laboral (7%)" value={"− " + money(Number(ps.inssLaboral))} />
-                      <Detalle label="IR retenido" value={"− " + money(Number(ps.irMensual))} />
-                      {Number(ps.otrasDeducciones) > 0 && (
-                        <Detalle
-                          label={ps.otrasDeduccionesConcepto || "Otras deducciones"}
-                          value={"− " + money(Number(ps.otrasDeducciones))}
-                        />
-                      )}
-                      <Detalle label="Neto a pagar" value={money(Number(ps.netPay))} bold />
-                      <Detalle label="Provisión aguinaldo" value={money(Number(ps.provisionAguinaldo))} />
-                      <Detalle label="Provisión vacaciones" value={money(Number(ps.provisionVacaciones))} />
-                      <Detalle label="Provisión indemnización" value={money(Number(ps.provisionIndemnizacion))} />
-                      <Detalle label="Total provisiones del mes" value={money(provisiones)} bold />
-                    </div>
+                    {selectedPeriod.tipo === "AGUINALDO" ? (
+                      <div className="mt-4 pt-4 border-t border-line grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
+                        <Detalle label="Aguinaldo pagado (exento de INSS/IR)" value={money(Number(ps.grossSalary))} />
+                        <Detalle label="Neto pagado" value={money(Number(ps.netPay))} bold />
+                      </div>
+                    ) : (
+                      <div className="mt-4 pt-4 border-t border-line grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
+                        <Detalle label="Salario bruto" value={money(Number(ps.grossSalary))} />
+                        <Detalle label="Horas extra" value={`${Number(ps.horasExtraCantidad)} h · ${money(Number(ps.horasExtraMonto))}`} />
+                        <Detalle label="Comisiones" value={money(Number(ps.comisiones))} />
+                        <Detalle label="Retroactivos" value={money(Number(ps.retroactivos))} />
+                        <Detalle label="Viáticos (no gravable)" value={money(Number(ps.viaticos))} />
+                        <Detalle label="INSS laboral (7%)" value={"− " + money(Number(ps.inssLaboral))} />
+                        <Detalle label="IR retenido" value={"− " + money(Number(ps.irMensual))} />
+                        {Number(ps.otrasDeducciones) > 0 && (
+                          <Detalle
+                            label={ps.otrasDeduccionesConcepto || "Otras deducciones"}
+                            value={"− " + money(Number(ps.otrasDeducciones))}
+                          />
+                        )}
+                        <Detalle label="Neto a pagar" value={money(Number(ps.netPay))} bold />
+                        <Detalle label="Provisión aguinaldo" value={money(Number(ps.provisionAguinaldo))} />
+                        <Detalle label="Provisión vacaciones" value={money(Number(ps.provisionVacaciones))} />
+                        <Detalle label="Provisión indemnización" value={money(Number(ps.provisionIndemnizacion))} />
+                        <Detalle label="Total provisiones del mes" value={money(provisiones)} bold />
+                      </div>
+                    )}
                     <a
                       href={`/api/comprobante/${ps.id}`}
                       className="inline-block mt-3 px-3.5 py-2 rounded-lg border border-linestrong text-xs text-inkdim hover:border-gold hover:text-gold transition"

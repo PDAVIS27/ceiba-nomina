@@ -2,7 +2,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SubmitButton from "@/components/SubmitButton";
-import { runPayroll, cargarPlanillaDesdeExcel } from "@/app/dashboard/actions";
+import { runPayroll, cargarPlanillaDesdeExcel, generarPreplanillaAguinaldo } from "@/app/dashboard/actions";
+import { balanceProvisiones } from "@/lib/provisiones";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,12 @@ export default async function NominaPage({
     where: { companyId, active: true },
     orderBy: { createdAt: "asc" },
   });
+
+  const saldosAguinaldo = await Promise.all(
+    employees.map(async (e) => ({ id: e.id, saldo: (await balanceProvisiones(e.id)).aguinaldoSaldo }))
+  );
+  const saldoPorEmpleado = new Map(saldosAguinaldo.map((s) => [s.id, s.saldo]));
+  const hoyISO = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
@@ -131,8 +138,62 @@ export default async function NominaPage({
           </SubmitButton>
         </form>
       </section>
+
+      <section className="bg-panel border border-line rounded-xl p-6 mt-6">
+        <h3 className="font-serif text-lg font-semibold mb-2">Pagar aguinaldo (diciembre)</h3>
+        <p className="text-inkdim text-sm mb-4">
+          Genera el borrador de pago de aguinaldo con el saldo acumulado de cada colaborador (Art. 93-99 CT) —
+          exento de INSS e IR, se paga íntegro. Puedes ajustar el monto si vas a pagar solo una parte. Al
+          aprobarlo en Históricos, la plataforma registra el pago automáticamente y lo descuenta del saldo
+          acumulado, igual que "Registrar pago de aguinaldo" en el detalle de cada colaborador.
+        </p>
+        <form action={generarPreplanillaAguinaldo}>
+          <div className="mb-4 flex flex-wrap gap-3 items-end">
+            <Field name="label" label="Nombre del período" placeholder="Aguinaldo diciembre 2026" />
+            <FechaField name="fechaPago" label="Fecha de pago" defaultValue={hoyISO} />
+          </div>
+
+          {employees.length > 0 && (
+            <table className="w-full text-sm mb-5">
+              <thead>
+                <tr className="text-inkfaint text-xs uppercase font-mono text-left border-b border-linestrong">
+                  <th className="pb-2">Colaborador</th>
+                  <th className="pb-2 text-right">Saldo acumulado</th>
+                  <th className="pb-2 text-right">Monto a pagar (C$)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map((e) => {
+                  const saldo = saldoPorEmpleado.get(e.id) ?? 0;
+                  return (
+                    <tr key={e.id} className="border-b border-line">
+                      <td className="py-2.5">{e.fullName}</td>
+                      <td className="py-2.5 text-right font-mono text-inkdim">{money(saldo)}</td>
+                      <td className="py-2.5 text-right">
+                        <input name={`aguinaldo_${e.id}`} type="number" min="0" step="0.01" defaultValue={saldo.toFixed(2)}
+                          className="w-32 bg-[#12181a] border border-linestrong rounded-lg px-2.5 py-1.5 text-sm text-right" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          {employees.length === 0 && (
+            <p className="text-inkfaint text-sm mb-5">Agrega al menos un colaborador antes de pagar aguinaldo.</p>
+          )}
+
+          <SubmitButton className="px-5 py-3 rounded-lg bg-gold text-[#1b1500] text-sm font-medium" pendingText="Calculando…">
+            Generar preplanilla de aguinaldo (borrador)
+          </SubmitButton>
+        </form>
+      </section>
     </div>
   );
+}
+
+function money(n: number) {
+  return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function Field({ name, label, placeholder }: { name: string; label: string; placeholder?: string }) {
@@ -145,11 +206,11 @@ function Field({ name, label, placeholder }: { name: string; label: string; plac
   );
 }
 
-function FechaField({ name, label }: { name: string; label: string }) {
+function FechaField({ name, label, defaultValue }: { name: string; label: string; defaultValue?: string }) {
   return (
     <div>
       <label className="block text-xs text-inkdim mb-1.5">{label}</label>
-      <input name={name} type="date" required
+      <input name={name} type="date" required defaultValue={defaultValue}
         className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
     </div>
   );

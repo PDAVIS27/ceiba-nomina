@@ -34,6 +34,15 @@ enum ProvisionTipo {
   VACACIONES
 }
 
+// Distingue una planilla normal de un pago especial de aguinaldo (diciembre).
+// Un período AGUINALDO no acumula provisiones nuevas — solo paga el saldo de
+// aguinaldo acumulado (exento de INSS/IR) y, al aprobarse, registra el pago
+// (ProvisionMovement) para descontarlo del saldo de cada colaborador.
+enum TipoPeriodo {
+  NOMINA
+  AGUINALDO
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -88,6 +97,7 @@ model PayrollPeriod {
   company    Company    @relation(fields: [companyId], references: [id])
   label      String
   status     String     @default("BORRADOR") // BORRADOR (pendiente de aprobación) | APROBADA (final)
+  tipo       TipoPeriodo @default(NOMINA)
   createdAt  DateTime   @default(now())
   approvedAt DateTime?
   payslips   Payslip[]
@@ -131,9 +141,17 @@ model SupportCase {
   id        String   @id @default(cuid())
   companyId String
   company   Company  @relation(fields: [companyId], references: [id])
+  // Categoría elegida por el negocio al reportar (ver src/lib/supportCategories.ts)
+  // — ayuda a clasificar de un vistazo qué tipo de caso es. Null en casos
+  // creados antes de este campo.
+  category  String?
   title     String
   detail    String
   resolved  Boolean  @default(false)
+  // Respuesta del proveedor al resolver el caso — el negocio la ve desde su
+  // panel, para saber qué se hizo o qué debe corregir. Solo el proveedor
+  // puede escribirla (se llena desde /admin).
+  providerNote String?
   createdAt DateTime @default(now())
 }
 

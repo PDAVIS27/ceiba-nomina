@@ -90,7 +90,8 @@ En el panel del proyecto, ve a **Settings → Environment Variables** y agrega:
 ## Paso 6 — Crea tu cuenta de proveedor
 
 1. Entra a `tu-sitio.vercel.app/setup` (una sola vez — después esta página se
-   bloquea sola por seguridad).
+   bloquea sola por seguridad; ya no hay un enlace a ella desde `/login`,
+   así que tienes que escribir la URL directamente esta primera vez).
 2. Crea tu correo y contraseña. Esa es tu cuenta de administrador de Ceiba.
 3. Inicia sesión en `/login` con esos mismos datos → entrarás directo al
    **panel de proveedor**.
@@ -211,7 +212,46 @@ con el nombre completo, N° de cédula, cuenta bancaria y neto a pagar de
 cada colaborador del período, más el total — pensado para mandarlo
 directo a quien hace las transferencias bancarias, sin tener que compartir
 todo el desglose de ingresos y deducciones. Si a algún colaborador le
-falta la cédula o la cuenta bancaria, esas columnas muestran "—".
+falta la cédula o la cuenta bancaria, esas columnas muestran "—". **Este
+botón solo aparece cuando el período ya está APROBADO** — mientras es
+borrador no se puede pagar nada todavía, así que no tendría sentido
+mandarlo al banco.
+
+### Pago de aguinaldo (diciembre)
+
+En Nómina hay una sección aparte, **"Pagar aguinaldo (diciembre)"**, para
+el pago anual (Art. 93-99 CT). Muestra a cada colaborador activo con su
+saldo de aguinaldo acumulado a la fecha (puedes ajustar el monto si vas a
+pagar solo una parte) y, al generarlo, crea un borrador especial —
+separado de una planilla normal — que en Históricos se distingue con un
+🎁 junto al nombre del período.
+
+El PDF de este borrador (preplanilla/planilla de aguinaldo) muestra un solo
+concepto por colaborador: el aguinaldo, marcado como exento de INSS/IR
+(Art. 97 CT) — no repite el resto del desglose de una planilla normal,
+porque no aplica. Cuando lo apruebes, la plataforma **registra el pago
+automáticamente** (como si hubieras usado "Registrar pago de aguinaldo" en
+el detalle de cada colaborador) y lo descuenta del saldo acumulado — así,
+si por error generas el borrador dos veces antes de aprobar el primero, el
+segundo ya no vuelve a ofrecer pagar lo que ya se pagó.
+
+### Interacción entre tu panel y el del negocio cliente
+
+Cuando un negocio reporta un problema (en Reportar), ahora elige primero
+una **categoría** (salario variable, doble empleador, cálculo que no
+cuadra, corrección de un dato, liquidación disputada, u otro) — así
+identificas de un vistazo qué tipo de caso es sin tener que leer el
+detalle completo. Un caso reportado **solo se puede marcar como resuelto
+desde tu panel de proveedor** (`/admin`) — el negocio nunca ve un botón
+para eso en su propio panel, solo el estado (pendiente/resuelto). Al
+resolver un caso puedes escribir una **respuesta** breve, que el negocio
+ve reflejada en su lista de casos — así sabe qué hiciste o qué debe
+corregir de su lado, sin que tengas que escribirle aparte.
+
+También se quitó de la pantalla de inicio de sesión el enlace para "crear
+la cuenta de proveedor" — ya la tienes creada, y esa página (`/setup`) de
+todos modos se bloquea sola después del primer uso, así que no hacía
+falta seguir mostrando el enlace.
 
 Los PDF de preplanilla y planilla (descargables desde Nómina → un período)
 ahora traen un bloque completo por colaborador — igual que un reporte de

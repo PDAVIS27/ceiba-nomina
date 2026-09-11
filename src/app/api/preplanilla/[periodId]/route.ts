@@ -27,6 +27,7 @@ export async function GET(_req: Request, { params }: { params: { periodId: strin
     estado: period.status as "BORRADOR" | "APROBADA",
     generadoEl: period.createdAt,
     aprobadoEl: period.approvedAt,
+    tipoPeriodo: period.tipo as "NOMINA" | "AGUINALDO",
     filas: period.payslips.map((ps) => ({
       nombre: ps.employee.fullName,
       codigo: ps.employee.externalCode,

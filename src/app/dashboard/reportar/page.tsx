@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SubmitButton from "@/components/SubmitButton";
 import { reportarProblema } from "@/app/dashboard/actions";
+import { CATEGORIAS_PROBLEMA, etiquetaCategoria } from "@/lib/supportCategories";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +33,20 @@ export default async function ReportarPage({
       <section className="bg-panel border border-line rounded-xl p-6 mb-6">
         <p className="text-inkdim text-sm mb-4">
           Úsalo para casos que la plataforma no resuelve sola todavía: un colaborador con salario variable,
-          un cálculo que no te cuadra, un dato que necesitas corregir, etc. Tu proveedor lo revisa a mano.
+          un cálculo que no te cuadra, un dato que necesitas corregir, etc. Elige la categoría que más se
+          parezca a tu caso — así tu proveedor lo identifica más rápido. Estos casos solo los puede marcar
+          como resueltos tu proveedor, desde su panel; aquí puedes ver el estado y su respuesta.
         </p>
         <form action={reportarProblema} className="space-y-3">
+          <div>
+            <label className="block text-xs text-inkdim mb-1.5">Tipo de problema</label>
+            <select name="category" required
+              className="w-full bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
+              {CATEGORIAS_PROBLEMA.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-xs text-inkdim mb-1.5">Título</label>
             <input name="title" required placeholder="Ej. Salario de Ana cambió a mitad de mes"
@@ -58,12 +70,21 @@ export default async function ReportarPage({
           {casos.map((c) => (
             <div key={c.id} className="border border-line rounded-lg px-4 py-3">
               <div className="flex justify-between items-start gap-3">
-                <div className={`font-medium ${c.resolved ? "line-through text-inkfaint" : ""}`}>{c.title}</div>
-                <span className={`text-xs font-mono ${c.resolved ? "text-emerald" : "text-gold"}`}>
+                <div>
+                  <div className="text-[10px] uppercase font-mono text-inkfaint mb-1">{etiquetaCategoria(c.category)}</div>
+                  <div className={`font-medium ${c.resolved ? "line-through text-inkfaint" : ""}`}>{c.title}</div>
+                </div>
+                <span className={`text-xs font-mono shrink-0 ${c.resolved ? "text-emerald" : "text-gold"}`}>
                   {c.resolved ? "RESUELTO" : "PENDIENTE"}
                 </span>
               </div>
               {c.detail && <div className="text-sm text-inkdim mt-1">{c.detail}</div>}
+              {c.providerNote && (
+                <div className="text-sm text-emerald bg-emerald/10 border border-emerald/30 rounded-lg px-3 py-2 mt-2">
+                  <span className="font-mono text-[10px] uppercase text-emerald/80">Respuesta de tu proveedor</span>
+                  <div>{c.providerNote}</div>
+                </div>
+              )}
             </div>
           ))}
         </div>

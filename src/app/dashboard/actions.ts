@@ -279,13 +279,118 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
 export async function aprobarPlanilla(formData: FormData) {
   const companyId = await requireCompanyId();
   const periodId = String(formData.get("periodId") || "");
-  const period = await prisma.payrollPeriod.findUnique({ where: { id: periodId } });
-  if (!period || period.companyId !== companyId || period.status === "APROBADA") return;
-  await prisma.payrollPeriod.update({
+  const period = await prisma.payrollPeriod.findUnique({
     where: { id: periodId },
-    data: { status: "APROBADA", approvedAt: new Date() },
+    include: { payslips: true },
   });
+  if (!period || period.companyId !== companyId || period.status === "APROBADA") return;
+
+  // Un período de AGUINALDO no es planilla normal: al aprobarse, además de
+  // marcarlo APROBADA, hay que REGISTRAR EL PAGO (ProvisionMovement) de cada
+  // colaborador, igual que "Registrar pago de aguinaldo" en su detalle — así
+  // se descuenta del saldo acumulado y no se puede volver a pagar dos veces.
+  if (period.tipo === "AGUINALDO") {
+    await prisma.$transaction([
+      prisma.payrollPeriod.update({
+        where: { id: periodId },
+        data: { status: "APROBADA", approvedAt: new Date() },
+      }),
+      ...period.payslips
+        .filter((ps) => Number(ps.netPay) > 0)
+        .map((ps) =>
+          prisma.provisionMovement.create({
+            data: {
+              employeeId: ps.employeeId,
+              companyId,
+              tipo: "AGUINALDO",
+              amount: ps.netPay,
+              note: `Pago de aguinaldo — período "${period.label}"`,
+            },
+          })
+        ),
+    ]);
+  } else {
+    await prisma.payrollPeriod.update({
+      where: { id: periodId },
+      data: { status: "APROBADA", approvedAt: new Date() },
+    });
+  }
+
   redirect(`/dashboard/historicos?periodo=${periodId}`);
+}
+
+/**
+ * Genera el borrador de pago de aguinaldo (diciembre): para cada colaborador
+ * activo con saldo de aguinaldo acumulado, crea un Payslip especial dentro de
+ * un PayrollPeriod de tipo AGUINALDO — el monto va íntegro (exento de INSS e
+ * IR, Art. 97 CT) y no acumula provisiones nuevas, porque es un pago, no un
+ * período trabajado. El saldo se descuenta hasta que el período se aprueba
+ * (ver aprobarPlanilla) — así, si se genera dos veces por error antes de
+ * aprobar, no se duplica el pago.
+ */
+export async function generarPreplanillaAguinaldo(formData: FormData) {
+  const companyId = await requireCompanyId();
+  const label = String(formData.get("label") || "Aguinaldo").trim();
+  const fechaPagoRaw = String(formData.get("fechaPago") || "");
+  const fechaPago = fechaPagoRaw ? new Date(fechaPagoRaw) : new Date();
+
+  const duplicado = await existeBorradorConEseNombre(companyId, label);
+  if (duplicado) {
+    redirect(
+      `/dashboard/nomina?error=${encodeURIComponent(
+        `Ya existe un borrador llamado "${label}" pendiente de aprobación. Ábrelo en Históricos, elimínalo o usa otro nombre.`
+      )}`
+    );
+  }
+
+  const employees = await prisma.employee.findMany({ where: { companyId, active: true } });
+  if (employees.length === 0) {
+    redirect(`/dashboard/nomina?error=${encodeURIComponent("No hay colaboradores activos.")}`);
+  }
+
+  const montos: { employeeId: string; monto: number }[] = [];
+  for (const e of employees) {
+    const montoFormulario = formData.get(`aguinaldo_${e.id}`);
+    const monto =
+      montoFormulario !== null
+        ? Math.max(Number(montoFormulario) || 0, 0)
+        : 0;
+    if (monto > 0) montos.push({ employeeId: e.id, monto: round2(monto) });
+  }
+
+  if (montos.length === 0) {
+    redirect(
+      `/dashboard/nomina?error=${encodeURIComponent(
+        "No hay ningún monto de aguinaldo mayor a cero para pagar."
+      )}`
+    );
+  }
+
+  const period = await prisma.payrollPeriod.create({
+    data: { companyId, label, tipo: "AGUINALDO", periodStart: fechaPago, periodEnd: fechaPago },
+  });
+
+  await prisma.payslip.createMany({
+    data: montos.map((m) => ({
+      periodId: period.id,
+      employeeId: m.employeeId,
+      grossSalary: m.monto,
+      horasExtraCantidad: 0,
+      horasExtraMonto: 0,
+      comisiones: 0,
+      retroactivos: 0,
+      viaticos: 0,
+      provisionAguinaldo: 0,
+      provisionVacaciones: 0,
+      provisionIndemnizacion: 0,
+      otrasDeducciones: 0,
+      inssLaboral: 0,
+      irMensual: 0,
+      netPay: m.monto,
+    })),
+  });
+
+  redirect(`/dashboard/historicos?periodo=${period.id}`);
 }
 
 /**
@@ -305,10 +410,11 @@ export async function eliminarBorrador(formData: FormData) {
 
 export async function reportarProblema(formData: FormData) {
   const companyId = await requireCompanyId();
+  const category = String(formData.get("category") || "").trim() || null;
   const title = String(formData.get("title") || "").trim();
   const detail = String(formData.get("detail") || "").trim();
   if (!title) return;
-  await prisma.supportCase.create({ data: { companyId, title, detail } });
+  await prisma.supportCase.create({ data: { companyId, category, title, detail } });
   redirect("/dashboard/reportar?ok=1");
 }
 

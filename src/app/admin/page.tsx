@@ -5,6 +5,7 @@ import SignOutButton from "@/components/SignOutButton";
 import SubmitButton from "@/components/SubmitButton";
 import IRSimulator from "@/components/IRSimulator";
 import crypto from "crypto";
+import { CATEGORIAS_PROBLEMA, etiquetaCategoria } from "@/lib/supportCategories";
 
 export const dynamic = "force-dynamic";
 
@@ -35,18 +36,31 @@ async function createCompany(formData: FormData) {
 async function toggleCase(formData: FormData) {
   "use server";
   const id = String(formData.get("id"));
+  const providerNote = String(formData.get("providerNote") || "").trim() || null;
   const current = await prisma.supportCase.findUnique({ where: { id } });
   if (!current) return;
-  await prisma.supportCase.update({ where: { id }, data: { resolved: !current.resolved } });
+  // Solo esta función (dentro de /admin, protegido para PROVIDER_ADMIN por
+  // el middleware) puede marcar un caso como resuelto — el negocio cliente
+  // nunca ve un botón para esto en su propio panel.
+  await prisma.supportCase.update({
+    where: { id },
+    data: {
+      resolved: !current.resolved,
+      // Al reabrir un caso no se borra la nota anterior; al resolverlo, si
+      // escribiste una nueva, reemplaza la anterior.
+      ...(providerNote && !current.resolved ? { providerNote } : {}),
+    },
+  });
 }
 
 async function createCase(formData: FormData) {
   "use server";
   const companyId = String(formData.get("companyId") || "");
+  const category = String(formData.get("category") || "").trim() || null;
   const title = String(formData.get("title") || "").trim();
   const detail = String(formData.get("detail") || "").trim();
   if (!companyId || !title) return;
-  await prisma.supportCase.create({ data: { companyId, title, detail } });
+  await prisma.supportCase.create({ data: { companyId, category, title, detail } });
 }
 
 /**
@@ -174,14 +188,26 @@ export default async function AdminPage({
         <h3 className="font-serif text-lg font-semibold mb-4">Casos abiertos — requieren tu intervención</h3>
         {cases.length === 0 && <div className="text-inkfaint text-sm">No hay casos registrados todavía.</div>}
         {cases.map((c) => (
-          <div key={c.id} className="py-4 border-b border-line flex justify-between items-start gap-4">
-            <div>
-              <div className="font-mono text-[11px] text-inkfaint mb-1">{c.company.name.toUpperCase()}</div>
+          <div key={c.id} className="py-4 border-b border-line flex justify-between items-start gap-4 flex-wrap">
+            <div className="max-w-xl">
+              <div className="font-mono text-[11px] text-inkfaint mb-1">
+                {c.company.name.toUpperCase()} · {etiquetaCategoria(c.category)}
+              </div>
               <div className={`font-medium mb-1 ${c.resolved ? "line-through text-inkfaint" : ""}`}>{c.title}</div>
-              <div className="text-sm text-inkdim max-w-xl">{c.detail}</div>
+              <div className="text-sm text-inkdim">{c.detail}</div>
+              {c.providerNote && (
+                <div className="text-xs text-emerald mt-1.5">Tu respuesta: {c.providerNote}</div>
+              )}
             </div>
-            <form action={toggleCase}>
+            <form action={toggleCase} className="flex gap-2 items-end flex-wrap">
               <input type="hidden" name="id" value={c.id} />
+              {!c.resolved && (
+                <div>
+                  <label className="block text-xs text-inkdim mb-1.5">Respuesta (opcional)</label>
+                  <input name="providerNote" placeholder="Qué hiciste o qué debe corregir"
+                    className="bg-[#12181a] border border-linestrong rounded-lg px-3 py-2 text-xs w-56" />
+                </div>
+              )}
               <SubmitButton className={`px-3.5 py-2 rounded-lg text-xs font-medium ${c.resolved ? "border border-linestrong" : "bg-emerald text-[#eafaf3]"}`}>
                 {c.resolved ? "Reabrir" : "Marcar resuelto"}
               </SubmitButton>
@@ -195,6 +221,14 @@ export default async function AdminPage({
             <select name="companyId" required className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-inkdim mb-1.5">Categoría</label>
+            <select name="category" className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
+              {CATEGORIAS_PROBLEMA.map((cat) => (
+                <option key={cat.value} value={cat.value}>{cat.label}</option>
               ))}
             </select>
           </div>
