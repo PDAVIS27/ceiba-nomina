@@ -201,6 +201,8 @@ export interface DesglosePeriodo {
   provisionVacaciones: number;
   provisionIndemnizacion: number;
   totalDevengado: number;
+  otrasDeducciones: number;
+  otrasDeduccionesConcepto: string | null;
   netoPagar: number;
 }
 
@@ -224,6 +226,8 @@ export function calcularPeriodo(params: {
   retroactivos?: number;
   viaticos?: number;
   antiguedadMeses?: number;
+  otrasDeducciones?: number;
+  otrasDeduccionesConcepto?: string | null;
 }): DesglosePeriodo {
   const bruto = params.bruto;
   const horasExtraCantidad = params.horasExtraCantidad || 0;
@@ -231,6 +235,8 @@ export function calcularPeriodo(params: {
   const retroactivos = params.retroactivos || 0;
   const viaticos = params.viaticos || 0;
   const antiguedadMeses = params.antiguedadMeses || 0;
+  const otrasDeducciones = Math.max(params.otrasDeducciones || 0, 0);
+  const otrasDeduccionesConcepto = otrasDeducciones > 0 ? (params.otrasDeduccionesConcepto || null) : null;
 
   const horasExtraMonto = calcularHorasExtra(bruto, horasExtraCantidad);
   const totalGravable = round2(bruto + horasExtraMonto + comisiones + retroactivos);
@@ -249,7 +255,10 @@ export function calcularPeriodo(params: {
   const provIndemnizacion = provisionIndemnizacion(bruto, antiguedadMeses);
 
   const totalDevengado = round2(totalGravable + viaticos);
-  const netoPagar = round2(totalDevengado - inssLaboral - irMensual);
+  // Otras deducciones (no son de ley: error de pago, faltas, llegadas tardías,
+  // etc.) se restan directo del neto — NO afectan la base gravable ni el
+  // cálculo de INSS/IR, que son solo de ley.
+  const netoPagar = round2(totalDevengado - inssLaboral - irMensual - otrasDeducciones);
 
   return {
     bruto,
@@ -269,6 +278,8 @@ export function calcularPeriodo(params: {
     provisionVacaciones: provVacaciones,
     provisionIndemnizacion: provIndemnizacion,
     totalDevengado,
+    otrasDeducciones,
+    otrasDeduccionesConcepto,
     netoPagar,
   };
 }

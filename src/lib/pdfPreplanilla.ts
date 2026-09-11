@@ -12,6 +12,8 @@ export interface FilaPDF {
   comisiones: number;
   retroactivos: number;
   viaticos: number;
+  otrasDeducciones?: number;
+  otrasDeduccionesConcepto?: string | null;
   inss: number;
   ir: number;
   neto: number;
@@ -42,6 +44,8 @@ export async function generarPDFComprobanteIndividual(datos: {
   comisiones: number;
   retroactivos: number;
   viaticos: number;
+  otrasDeducciones?: number;
+  otrasDeduccionesConcepto?: string | null;
   inss: number;
   ir: number;
   neto: number;
@@ -102,6 +106,9 @@ export async function generarPDFComprobanteIndividual(datos: {
   y -= 14;
   fila("INSS laboral", "- " + money(datos.inss));
   fila("IR retenido", "- " + money(datos.ir));
+  if ((datos.otrasDeducciones ?? 0) > 0) {
+    fila(datos.otrasDeduccionesConcepto || "Otras deducciones", "- " + money(datos.otrasDeducciones!));
+  }
   linea(false);
   fila("NETO A PAGAR", money(datos.neto), true);
 
@@ -443,6 +450,9 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
     if (f.viaticos > 0) conceptos.push({ nombre: "Viáticos", asignacion: f.viaticos });
     conceptos.push({ nombre: "INSS laboral", cantidad: "7%", deduccion: f.inss });
     conceptos.push({ nombre: "IR retenido", deduccion: f.ir });
+    if ((f.otrasDeducciones ?? 0) > 0) {
+      conceptos.push({ nombre: f.otrasDeduccionesConcepto || "Otras deducciones", deduccion: f.otrasDeducciones });
+    }
 
     // Alto estimado del bloque completo, para decidir si cabe en lo que
     // queda de página antes de empezar a dibujarlo.
@@ -540,6 +550,136 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
     texto("Aprobado por (nombre y firma): _______________________________", margin, y, { size: 9 });
     texto("Fecha: ______________", tableRight - 140, y, { size: 9 });
   }
+
+  return pdf.save();
+}
+
+export interface FilaListadoPago {
+  nombre: string;
+  cedula?: string | null;
+  cuentaBancaria?: string | null;
+  neto: number;
+}
+
+export interface DatosListadoPagoPDF {
+  empresa: string;
+  periodo: string;
+  estado: "BORRADOR" | "APROBADA";
+  generadoEl: Date;
+  filas: FilaListadoPago[];
+}
+
+/**
+ * Listado de pago: una tabla simple (N°, Nombre completo, N° Cédula, Cuenta
+ * bancaria, Neto a pagar) pensada para mandarla al banco o a quien haga las
+ * transferencias — no repite el desglose de ingresos/deducciones, que ya
+ * está en la preplanilla/planilla y en el comprobante individual.
+ */
+export async function generarPDFListadoPago(datos: DatosListadoPagoPDF): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  const pageWidth = PageSizes.Letter[0];
+  const pageHeight = PageSizes.Letter[1];
+  const margin = 46;
+  const tableLeft = margin;
+  const tableRight = pageWidth - margin;
+
+  // Columnas: N° | Nombre completo | N° Cédula | Cuenta bancaria | Neto a pagar
+  const colNRight = margin + 26;
+  const colNombre = margin + 34;
+  const colCedula = margin + 230;
+  const colCuenta = margin + 350;
+  const colNetoRight = tableRight;
+  const filaAlto = 20;
+
+  let page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  function texto(t: string, x: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    page.drawText(t, { x, y: yy, size: opts.size ?? 9, font: opts.bold ? fontBold : font, color: opts.color ?? INK });
+  }
+  function textoDer(t: string, xRight: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    const size = opts.size ?? 9;
+    const f = opts.bold ? fontBold : font;
+    texto(t, xRight - f.widthOfTextAtSize(t, size), yy, opts);
+  }
+  function hline(x1: number, x2: number, yy: number, color = LINE, thickness = 0.75) {
+    page.drawLine({ start: { x: x1, y: yy }, end: { x: x2, y: yy }, thickness, color });
+  }
+  function vline(x: number, y1: number, y2: number, color = LINE, thickness = 0.75) {
+    page.drawLine({ start: { x, y: y1 }, end: { x, y: y2 }, thickness, color });
+  }
+
+  const tituloEstado = datos.estado === "BORRADOR" ? "BORRADOR — NO VÁLIDO PARA PAGO" : "PLANILLA APROBADA";
+  const colorEstado = datos.estado === "BORRADOR" ? GOLD : EMERALD;
+
+  function encabezado(primeraPagina: boolean) {
+    if (primeraPagina) {
+      texto("CEIBA", margin, y, { size: 20, bold: true, color: EMERALD });
+      textoDer(`Generado: ${datos.generadoEl.toLocaleString("es-NI")}`, tableRight, y + 5, { size: 8, color: DIM });
+      y -= 18;
+      texto("LISTADO DE PAGO", margin, y, { size: 12, bold: true, color: EMERALD });
+      textoDer(tituloEstado, tableRight, y + 2, { size: 8, bold: true, color: colorEstado });
+      y -= 18;
+      texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin, y, { size: 10, bold: true });
+      y -= 12;
+      hline(tableLeft, tableRight, y, INK, 1.2);
+      y -= 20;
+    } else {
+      texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin, y, { size: 9, bold: true, color: DIM });
+      textoDer(tituloEstado, tableRight, y, { size: 8, bold: true, color: colorEstado });
+      y -= 10;
+      hline(tableLeft, tableRight, y);
+      y -= 18;
+    }
+    texto("N°", margin + 4, y, { size: 8, bold: true, color: DIM });
+    texto("Nombre completo", colNombre, y, { size: 8, bold: true, color: DIM });
+    texto("N° Cédula", colCedula, y, { size: 8, bold: true, color: DIM });
+    texto("Cuenta bancaria", colCuenta, y, { size: 8, bold: true, color: DIM });
+    textoDer("Neto a pagar", colNetoRight, y, { size: 8, bold: true, color: DIM });
+    y -= 6;
+    hline(tableLeft, tableRight, y);
+    y -= filaAlto - 4;
+  }
+
+  function nuevaPagina() {
+    page = pdf.addPage([pageWidth, pageHeight]);
+    y = pageHeight - margin;
+    encabezado(false);
+  }
+
+  encabezado(true);
+
+  let totalNeto = 0;
+  let n = 0;
+  const filaTopInicial = y + filaAlto - 4;
+  let filaTop = filaTopInicial;
+
+  for (const f of datos.filas) {
+    n++;
+    if (y - filaAlto < margin + 50) {
+      hline(tableLeft, tableRight, y + filaAlto - 4);
+      nuevaPagina();
+      filaTop = y + filaAlto - 4;
+    }
+
+    texto(String(n), margin + 4, y, { size: 8.5 });
+    texto(f.nombre, colNombre, y, { size: 8.5 });
+    texto(f.cedula || "—", colCedula, y, { size: 8.5 });
+    texto(f.cuentaBancaria || "—", colCuenta, y, { size: 8.5 });
+    textoDer(money(f.neto), colNetoRight, y, { size: 8.5, bold: true });
+    y -= filaAlto;
+    totalNeto = round2(totalNeto + f.neto);
+  }
+
+  hline(tableLeft, tableRight, y + filaAlto - 4, INK, 1);
+  y -= 6;
+
+  if (y < margin + 40) nuevaPagina();
+  texto(`TOTAL — ${n} colaborador${n === 1 ? "" : "es"}`, colNombre, y, { size: 9.5, bold: true });
+  textoDer(money(totalNeto), colNetoRight, y, { size: 10.5, bold: true, color: EMERALD });
 
   return pdf.save();
 }

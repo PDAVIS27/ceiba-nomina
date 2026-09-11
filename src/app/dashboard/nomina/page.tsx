@@ -30,8 +30,9 @@ export default async function NominaPage({
       <section className="bg-panel border border-line rounded-xl p-6 mb-6">
         <h3 className="font-serif text-lg font-semibold mb-2">Cargar planilla desde Excel</h3>
         <p className="text-inkdim text-sm mb-4">
-          Sube el archivo con código, nombre, departamento, salario, horas extra, viáticos y retroactivos —
-          crea a quien no exista, actualiza a quien ya exista, y genera la preplanilla de una sola vez.
+          Sube el archivo con código, nombre, cédula, cuenta bancaria, departamento, salario, horas extra,
+          viáticos, retroactivos y otras deducciones — crea a quien no exista, actualiza a quien ya exista, y
+          genera la preplanilla de una sola vez.
         </p>
         <div className="flex flex-wrap gap-3 items-end mb-3">
           <a
@@ -64,7 +65,9 @@ export default async function NominaPage({
           Esto crea un borrador para revisión — todavía no es la final. Complétalo, descarga el PDF en
           Históricos, y cuando el cliente lo apruebe, márcalo como aprobado ahí mismo. La fecha de fin es
           importante: es lo que usa la plataforma para saber hasta qué día quedó cubierto cada colaborador en
-          el histórico de provisiones (ver su detalle en Colaboradores).
+          el histórico de provisiones (ver su detalle en Colaboradores). La columna "Otras deducciones" es para
+          un descuento que decides tú y no es de ley (error de pago, falta, llegada tardía, etc.) — se resta
+          del neto sin afectar el INSS ni el IR.
         </p>
         <form action={runPayroll}>
           <div className="mb-4 flex flex-wrap gap-3 items-end">
@@ -82,6 +85,8 @@ export default async function NominaPage({
                   <th className="pb-2 text-right">Comisiones (C$)</th>
                   <th className="pb-2 text-right">Retroactivos (C$)</th>
                   <th className="pb-2 text-right">Viáticos (C$)</th>
+                  <th className="pb-2 text-right">Otras deducciones (C$)</th>
+                  <th className="pb-2">Motivo</th>
                 </tr>
               </thead>
               <tbody>
@@ -103,6 +108,14 @@ export default async function NominaPage({
                     <td className="py-2.5 text-right">
                       <input name={`via_${e.id}`} type="number" min="0" step="1" defaultValue="0"
                         className="w-28 bg-[#12181a] border border-linestrong rounded-lg px-2.5 py-1.5 text-sm text-right" />
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <input name={`otrasDed_${e.id}`} type="number" min="0" step="1" defaultValue="0"
+                        className="w-28 bg-[#12181a] border border-linestrong rounded-lg px-2.5 py-1.5 text-sm text-right" />
+                    </td>
+                    <td className="py-2.5">
+                      <input name={`otrasDedMotivo_${e.id}`} type="text" placeholder="Ej. Llegada tardía"
+                        className="w-40 bg-[#12181a] border border-linestrong rounded-lg px-2.5 py-1.5 text-sm" />
                     </td>
                   </tr>
                 ))}

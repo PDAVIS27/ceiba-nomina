@@ -30,13 +30,22 @@ export async function addEmployee(formData: FormData) {
   const companyId = await requireCompanyId();
   const fullName = String(formData.get("fullName") || "").trim();
   const cedula = String(formData.get("cedula") || "").trim();
+  const cuentaBancaria = String(formData.get("cuentaBancaria") || "").trim();
   const role = String(formData.get("role") || "").trim();
   const grossSalary = Number(formData.get("grossSalary") || 0);
   const startDateRaw = String(formData.get("startDate") || "");
   const startDate = startDateRaw ? new Date(startDateRaw) : new Date();
   if (!fullName || !role || grossSalary <= 0) return;
   await prisma.employee.create({
-    data: { companyId, fullName, cedula: cedula || null, role, grossSalary, startDate },
+    data: {
+      companyId,
+      fullName,
+      cedula: cedula || null,
+      cuentaBancaria: cuentaBancaria || null,
+      role,
+      grossSalary,
+      startDate,
+    },
   });
   redirect("/dashboard/colaboradores?ok=1");
 }
@@ -100,6 +109,8 @@ export async function runPayroll(formData: FormData) {
       const comisiones = Number(formData.get(`com_${e.id}`) || 0);
       const retroactivos = Number(formData.get(`retro_${e.id}`) || 0);
       const viaticos = Number(formData.get(`via_${e.id}`) || 0);
+      const otrasDeducciones = Math.max(Number(formData.get(`otrasDed_${e.id}`)) || 0, 0);
+      const otrasDeduccionesConcepto = String(formData.get(`otrasDedMotivo_${e.id}`) || "").trim() || null;
       const antiguedadMeses = mesesEntre(new Date(e.startDate), hoy);
 
       const d = calcularPeriodo({
@@ -109,6 +120,8 @@ export async function runPayroll(formData: FormData) {
         retroactivos,
         viaticos,
         antiguedadMeses,
+        otrasDeducciones,
+        otrasDeduccionesConcepto,
       });
 
       return {
@@ -123,6 +136,8 @@ export async function runPayroll(formData: FormData) {
         provisionAguinaldo: d.provisionAguinaldo,
         provisionVacaciones: d.provisionVacaciones,
         provisionIndemnizacion: d.provisionIndemnizacion,
+        otrasDeducciones: d.otrasDeducciones,
+        otrasDeduccionesConcepto: d.otrasDeduccionesConcepto,
         inssLaboral: d.inssLaboral,
         irMensual: d.irMensual,
         netPay: d.netoPagar,
@@ -187,6 +202,8 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
           role: f.role,
           grossSalary: f.grossSalary,
           externalCode: f.externalCode ?? undefined,
+          ...(f.cedula ? { cedula: f.cedula } : {}),
+          ...(f.cuentaBancaria ? { cuentaBancaria: f.cuentaBancaria } : {}),
           ...(f.startDate ? { startDate: f.startDate } : {}),
         },
       });
@@ -196,6 +213,8 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
           companyId,
           externalCode: f.externalCode,
           fullName: f.fullName,
+          cedula: f.cedula ?? null,
+          cuentaBancaria: f.cuentaBancaria ?? null,
           role: f.role,
           grossSalary: f.grossSalary,
           startDate: f.startDate ?? hoy,
@@ -220,6 +239,8 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
         retroactivos: f.retroactivos,
         viaticos: f.viaticos,
         antiguedadMeses,
+        otrasDeducciones: f.otrasDeducciones,
+        otrasDeduccionesConcepto: f.otrasDeduccionesConcepto,
       });
       return {
         periodId: period.id,
@@ -233,6 +254,8 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
         provisionAguinaldo: d.provisionAguinaldo,
         provisionVacaciones: d.provisionVacaciones,
         provisionIndemnizacion: d.provisionIndemnizacion,
+        otrasDeducciones: d.otrasDeducciones,
+        otrasDeduccionesConcepto: d.otrasDeduccionesConcepto,
         inssLaboral: d.inssLaboral,
         irMensual: d.irMensual,
         netPay: d.netoPagar,

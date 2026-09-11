@@ -39,6 +39,7 @@ export default async function ColaboradoresPage() {
         <form action={addEmployee} className="flex flex-wrap gap-3 items-end">
           <Field name="fullName" label="Nombre completo" placeholder="Ej. Ana Reyes" />
           <Field name="cedula" label="N° de cédula (opcional)" placeholder="001-010190-0001A" required={false} />
+          <Field name="cuentaBancaria" label="Cuenta bancaria (opcional)" placeholder="10012345678" required={false} />
           <Field name="role" label="Puesto / Departamento" placeholder="Ej. Cajera" />
           <Field name="grossSalary" label="Salario bruto (C$)" type="number" placeholder="9200" />
           <Field name="startDate" label="Fecha de ingreso" type="date" />
@@ -71,7 +72,7 @@ export default async function ColaboradoresPage() {
                 <td className="py-3">
                   <div className="font-medium">{e.fullName}</div>
                   <div className="text-xs text-inkfaint">
-                    {e.role} {e.externalCode && `· ${e.externalCode}`} {e.cedula && `· ${e.cedula}`}
+                    {e.role} {e.externalCode && `· ${e.externalCode}`} {e.cedula && `· ${e.cedula}`} {e.cuentaBancaria && `· Cta. ${e.cuentaBancaria}`}
                   </div>
                 </td>
                 <td className="py-3 text-right font-mono">{money(d.bruto)}</td>

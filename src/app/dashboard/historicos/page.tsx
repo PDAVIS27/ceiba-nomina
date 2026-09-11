@@ -202,6 +202,12 @@ export default async function HistoricosPage({
                 >
                   {selectedPeriod.status === "BORRADOR" ? "Descargar preplanilla (PDF)" : "Descargar planilla (PDF)"}
                 </a>
+                <a
+                  href={`/api/listado-pago/${selectedPeriod.id}`}
+                  className="px-4 py-2 rounded-lg border border-linestrong text-xs text-inkdim hover:border-gold hover:text-gold transition"
+                >
+                  Descargar listado de pago (PDF)
+                </a>
                 {selectedPeriod.status === "BORRADOR" && (
                   <>
                     <form action={aprobarPlanilla}>
@@ -248,6 +254,12 @@ export default async function HistoricosPage({
                       <Detalle label="Viáticos (no gravable)" value={money(Number(ps.viaticos))} />
                       <Detalle label="INSS laboral (7%)" value={"− " + money(Number(ps.inssLaboral))} />
                       <Detalle label="IR retenido" value={"− " + money(Number(ps.irMensual))} />
+                      {Number(ps.otrasDeducciones) > 0 && (
+                        <Detalle
+                          label={ps.otrasDeduccionesConcepto || "Otras deducciones"}
+                          value={"− " + money(Number(ps.otrasDeducciones))}
+                        />
+                      )}
                       <Detalle label="Neto a pagar" value={money(Number(ps.netPay))} bold />
                       <Detalle label="Provisión aguinaldo" value={money(Number(ps.provisionAguinaldo))} />
                       <Detalle label="Provisión vacaciones" value={money(Number(ps.provisionVacaciones))} />

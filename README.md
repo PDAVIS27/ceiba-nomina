@@ -180,10 +180,38 @@ Desde la pantalla de detalle del colaborador puedes:
   del colaborador y de quien autoriza — sin explicaciones de cómo se calculó
   cada cifra, solo el resultado.
 
-Al agregar un colaborador puedes indicar su **número de cédula** (opcional,
-en "Agregar colaborador"). Si lo llenas, aparece identificando al colaborador
-en el PDF de liquidación, en el comprobante de pago individual y en la
-preplanilla/planilla, igual que en un comprobante de liquidación tradicional.
+Al agregar un colaborador puedes indicar su **número de cédula** y su
+**cuenta bancaria** (ambos opcionales, en "Agregar colaborador"). Si los
+llenas, la cédula aparece identificando al colaborador en el PDF de
+liquidación, en el comprobante de pago individual y en la
+preplanilla/planilla, igual que en un comprobante de liquidación
+tradicional; la cuenta bancaria se usa en el nuevo **listado de pago** (ver
+abajo). Estos dos campos también se pueden cargar/actualizar en lote desde
+la plantilla de Excel, con las columnas "N° de cédula" y "Cuenta bancaria".
+
+### Otras deducciones (descuentos que no son de ley)
+
+Además de INSS e IR (que son de ley y siempre se calculan igual), ahora
+puedes aplicar un **descuento adicional que decides tú como negocio** —
+por ejemplo un error de pago anterior, una falta, o una llegada tardía.
+Se agrega por colaborador al correr la planilla (tanto a mano en
+Nómina, con las columnas "Otras deducciones" y "Motivo", como al cargar
+el Excel, con las columnas "Otras deducciones (C$)" y "Motivo de otras
+deducciones"). Este descuento se resta directo del neto a pagar, pero
+**no afecta el cálculo de INSS ni de IR** — esas retenciones son solo las
+que exige la ley. El concepto que escribas (ej. "Descuento por llegada
+tardía") aparece etiquetado así en el comprobante individual, en la
+preplanilla/planilla y en el detalle de Históricos.
+
+### Listado de pago (para el banco o quien haga las transferencias)
+
+Desde Históricos, junto al botón para descargar la preplanilla/planilla,
+hay un botón para **descargar el listado de pago (PDF)**: una tabla simple
+con el nombre completo, N° de cédula, cuenta bancaria y neto a pagar de
+cada colaborador del período, más el total — pensado para mandarlo
+directo a quien hace las transferencias bancarias, sin tener que compartir
+todo el desglose de ingresos y deducciones. Si a algún colaborador le
+falta la cédula o la cuenta bancaria, esas columnas muestran "—".
 
 Los PDF de preplanilla y planilla (descargables desde Nómina → un período)
 ahora traen un bloque completo por colaborador — igual que un reporte de

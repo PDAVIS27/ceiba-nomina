@@ -3,11 +3,15 @@ import * as XLSX from "xlsx";
 export interface FilaImportada {
   externalCode: string | null;
   fullName: string;
+  cedula: string | null;
+  cuentaBancaria: string | null;
   role: string;
   grossSalary: number;
   horasExtraCantidad: number;
   viaticos: number;
   retroactivos: number;
+  otrasDeducciones: number;
+  otrasDeduccionesConcepto: string | null;
   startDate: Date | null; // null = mantener la que ya tenía / hoy si es nueva
 }
 
@@ -22,6 +26,8 @@ export interface ResultadoImportacion {
 const ALIAS = {
   externalCode: ["codigo colaborador", "codigo", "id colaborador", "código colaborador"],
   fullName: ["nombre del colaborador", "nombre completo", "nombre", "colaborador"],
+  cedula: ["n° de cedula", "no de cedula", "numero de cedula", "cedula", "n de cedula", "n° cedula"],
+  cuentaBancaria: ["cuenta bancaria", "n° de cuenta", "numero de cuenta", "cuenta"],
   role: ["departamento", "puesto", "cargo", "area", "área"],
   grossSalary: [
     "salario mensual (c$)", "salario mensual", "salario bruto (c$)", "salario bruto", "salario",
@@ -29,6 +35,10 @@ const ALIAS = {
   horasExtraCantidad: ["horas extras", "horas extra", "h. extra"],
   viaticos: ["viaticos (c$)", "viáticos (c$)", "viaticos", "viáticos"],
   retroactivos: ["retroactivos (c$)", "retroactivos", "retroactivo"],
+  otrasDeducciones: ["otras deducciones (c$)", "otras deducciones", "otra deduccion"],
+  otrasDeduccionesConcepto: [
+    "motivo de otras deducciones", "motivo otras deducciones", "motivo de la deduccion", "motivo deduccion",
+  ],
   startDate: ["fecha de ingreso (aaaa-mm-dd)", "fecha de ingreso", "fecha ingreso", "fecha"],
 } as const;
 
@@ -38,11 +48,15 @@ const CAMPOS_OBLIGATORIOS: Campo[] = ["fullName", "role", "grossSalary"];
 const NOMBRE_LEGIBLE: Record<Campo, string> = {
   externalCode: "Código colaborador",
   fullName: "Nombre del colaborador",
+  cedula: "N° de cédula",
+  cuentaBancaria: "Cuenta bancaria",
   role: "Departamento",
   grossSalary: "Salario mensual",
   horasExtraCantidad: "Horas extras",
   viaticos: "Viáticos",
   retroactivos: "Retroactivos",
+  otrasDeducciones: "Otras deducciones",
+  otrasDeduccionesConcepto: "Motivo de otras deducciones",
   startDate: "Fecha de ingreso",
 };
 
@@ -136,14 +150,23 @@ export function parsearExcelColaboradores(buffer: ArrayBuffer): ResultadoImporta
       if (!isNaN(parsed.getTime())) startDate = parsed;
     }
 
+    const cedula = String(get("cedula") ?? "").trim();
+    const cuentaBancaria = String(get("cuentaBancaria") ?? "").trim();
+    const otrasDeducciones = numero(get("otrasDeducciones"));
+    const otrasDeduccionesConcepto = String(get("otrasDeduccionesConcepto") ?? "").trim();
+
     filas.push({
       externalCode: externalCodeRaw || null,
       fullName,
+      cedula: cedula || null,
+      cuentaBancaria: cuentaBancaria || null,
       role,
       grossSalary,
       horasExtraCantidad: numero(get("horasExtraCantidad")),
       viaticos: numero(get("viaticos")),
       retroactivos: numero(get("retroactivos")),
+      otrasDeducciones,
+      otrasDeduccionesConcepto: otrasDeducciones > 0 ? (otrasDeduccionesConcepto || null) : null,
       startDate,
     });
   }

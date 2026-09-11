@@ -30,6 +30,8 @@ export async function GET(_req: Request, { params }: { params: { payslipId: stri
     comisiones: Number(ps.comisiones),
     retroactivos: Number(ps.retroactivos),
     viaticos: Number(ps.viaticos),
+    otrasDeducciones: Number(ps.otrasDeducciones),
+    otrasDeduccionesConcepto: ps.otrasDeduccionesConcepto,
     inss: Number(ps.inssLaboral),
     ir: Number(ps.irMensual),
     neto: Number(ps.netPay),
