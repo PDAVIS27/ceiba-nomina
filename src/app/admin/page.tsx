@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { CATEGORIAS_PROBLEMA, etiquetaCategoria } from "@/lib/supportCategories";
 import { REGIMENES_FISCALES, etiquetaRegimen } from "@/lib/regimenFiscal";
 import CeibaLogo from "@/components/CeibaLogo";
+import AutoSubmitSelect from "@/components/AutoSubmitSelect";
 
 export const dynamic = "force-dynamic";
 
@@ -177,17 +178,13 @@ export default async function AdminPage({
                 <td className="py-3">
                   <form action={actualizarRegimen} className="flex items-center gap-1.5">
                     <input type="hidden" name="companyId" value={c.id} />
-                    <select
+                    <AutoSubmitSelect
                       name="regimenFiscal"
                       defaultValue={c.regimenFiscal}
-                      onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                      options={REGIMENES_FISCALES.map((r) => ({ value: r.value, label: r.label }))}
                       className="bg-[#12181a] border border-linestrong rounded-lg px-2 py-1 text-xs"
-                      title="Solo informativo — no cambia el cálculo de IR de sus colaboradores"
-                    >
-                      {REGIMENES_FISCALES.map((r) => (
-                        <option key={r.value} value={r.value}>{r.label}</option>
-                      ))}
-                    </select>
+                      title="Cuota Fija desactiva el cálculo de IR laboral para todos sus colaboradores"
+                    />
                   </form>
                 </td>
                 <td className="py-3 text-xs font-mono text-emerald">{c.status}</td>
