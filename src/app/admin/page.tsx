@@ -6,6 +6,7 @@ import SubmitButton from "@/components/SubmitButton";
 import IRSimulator from "@/components/IRSimulator";
 import crypto from "crypto";
 import { CATEGORIAS_PROBLEMA, etiquetaCategoria } from "@/lib/supportCategories";
+import { REGIMENES_FISCALES, etiquetaRegimen } from "@/lib/regimenFiscal";
 import CeibaLogo from "@/components/CeibaLogo";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,8 @@ async function createCompany(formData: FormData) {
   "use server";
   const name = String(formData.get("name") || "").trim();
   const ownerEmail = String(formData.get("ownerEmail") || "").toLowerCase().trim();
+  const regimenRaw = String(formData.get("regimenFiscal") || "GENERAL");
+  const regimenFiscal = REGIMENES_FISCALES.some((r) => r.value === regimenRaw) ? regimenRaw : "GENERAL";
   if (!name || !ownerEmail) return;
 
   // Si ya existe una cuenta con ese correo (por ejemplo, por un doble clic o
@@ -26,12 +29,21 @@ async function createCompany(formData: FormData) {
   const tempPassword = crypto.randomBytes(6).toString("base64url");
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
-  const company = await prisma.company.create({ data: { name } });
+  const company = await prisma.company.create({ data: { name, regimenFiscal: regimenFiscal as any } });
   await prisma.user.create({
     data: { email: ownerEmail, passwordHash, role: "COMPANY_OWNER", companyId: company.id },
   });
 
   redirect(`/admin?created=${encodeURIComponent(ownerEmail)}&pwd=${encodeURIComponent(tempPassword)}`);
+}
+
+async function actualizarRegimen(formData: FormData) {
+  "use server";
+  const companyId = String(formData.get("companyId") || "");
+  const regimenRaw = String(formData.get("regimenFiscal") || "GENERAL");
+  const regimenFiscal = REGIMENES_FISCALES.some((r) => r.value === regimenRaw) ? regimenRaw : "GENERAL";
+  if (!companyId) return;
+  await prisma.company.update({ where: { id: companyId }, data: { regimenFiscal: regimenFiscal as any } });
 }
 
 async function toggleCase(formData: FormData) {
@@ -153,7 +165,7 @@ export default async function AdminPage({
           <thead>
             <tr className="text-inkfaint text-xs uppercase font-mono text-left border-b border-linestrong">
               <th className="pb-2">Negocio</th><th className="pb-2">Colaboradores</th>
-              <th className="pb-2">INSS patronal</th><th className="pb-2">Estado</th>
+              <th className="pb-2">INSS patronal</th><th className="pb-2">Régimen fiscal</th><th className="pb-2">Estado</th>
             </tr>
           </thead>
           <tbody>
@@ -162,11 +174,27 @@ export default async function AdminPage({
                 <td className="py-3 font-medium">{c.name}</td>
                 <td className="py-3">{c.employees.length}</td>
                 <td className="py-3">{c.employees.length >= 50 ? "22.5%" : "21.5%"}</td>
+                <td className="py-3">
+                  <form action={actualizarRegimen} className="flex items-center gap-1.5">
+                    <input type="hidden" name="companyId" value={c.id} />
+                    <select
+                      name="regimenFiscal"
+                      defaultValue={c.regimenFiscal}
+                      onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                      className="bg-[#12181a] border border-linestrong rounded-lg px-2 py-1 text-xs"
+                      title="Solo informativo — no cambia el cálculo de IR de sus colaboradores"
+                    >
+                      {REGIMENES_FISCALES.map((r) => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                  </form>
+                </td>
                 <td className="py-3 text-xs font-mono text-emerald">{c.status}</td>
               </tr>
             ))}
             {companies.length === 0 && (
-              <tr><td colSpan={4} className="py-6 text-center text-inkfaint">Todavía no registras negocios.</td></tr>
+              <tr><td colSpan={5} className="py-6 text-center text-inkfaint">Todavía no registras negocios.</td></tr>
             )}
           </tbody>
         </table>
@@ -182,10 +210,22 @@ export default async function AdminPage({
             <input name="ownerEmail" type="email" required placeholder="dueño@negocio.com"
               className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
           </div>
+          <div>
+            <label className="block text-xs text-inkdim mb-1.5">Régimen fiscal</label>
+            <select name="regimenFiscal" defaultValue="GENERAL"
+              className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
+              {REGIMENES_FISCALES.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
           <SubmitButton className="px-5 py-3 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium" pendingText="Registrando…">
             Registrar negocio
           </SubmitButton>
         </form>
+        <div className="text-inkfaint text-xs mt-3">
+          El régimen fiscal es solo un dato del negocio — no cambia el cálculo del IR de sus colaboradores, que siempre depende del salario de cada quien (Art. 23, Ley 822).
+        </div>
       </section>
 
       <section className="bg-panel border border-line rounded-xl p-6 mb-6">

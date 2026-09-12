@@ -131,11 +131,40 @@ En el panel del proyecto, ve a **Settings → Environment Variables** y agrega:
 ## Paso 7 — Registra tu primer negocio piloto
 
 1. En el panel de proveedor, llena "Registrar negocio" con el nombre del
-   negocio y el correo del dueño o encargado de RRHH.
+   negocio, el correo del dueño o encargado de RRHH, y su **régimen fiscal**
+   (ver sección siguiente).
 2. Te va a mostrar una contraseña temporal una sola vez — cópiala y envíasela
    a tu cliente por un canal seguro (WhatsApp o llamada, no por correo abierto).
 3. Tu cliente entra en `/login` con ese correo y esa contraseña, y llega a su
    propio panel: ahí agrega a sus colaboradores y corre su planilla.
+
+---
+
+## Régimen fiscal del negocio (Régimen General / Cuota Fija / Zona Franca)
+
+Al registrar un negocio (o después, desde la tabla de "Negocios" en tu panel
+de proveedor) eliges su régimen fiscal ante la DGI. Se muestra en esa tabla y
+en el Inicio del propio negocio, y **Cuota Fija sí cambia un cálculo**: para
+cualquier negocio marcado como Cuota Fija, Ceiba deja de calcular y retener
+IR laboral a todos sus colaboradores — en preplanilla/planilla (manual o por
+Excel), en el Inicio (el bloque "Lo que debes pagar") y en la liquidación al
+dar de baja a alguien. El INSS laboral (7%) se sigue calculando siempre igual
+— es un aporte a la INSS, no un impuesto de la DGI. Régimen General y Zona
+Franca no cambian ningún cálculo.
+
+**Nota de transparencia:** las fuentes públicas que revisé (Ley 822 y su
+Reglamento, guías de firmas contables, el acuerdo ministerial de Cuota Fija)
+describen ese régimen como un sustituto del IR y el IVA **del negocio**
+(persona natural, ingresos ≤ C$100,000/mes) — el IR laboral en general se
+describe como algo que depende del salario del colaborador, no del régimen
+del empleador, y no encontré una exención explícita para ese caso. Implementé
+esto porque me confirmaste que así se maneja en la práctica con tus clientes
+Cuota Fija — vale la pena que lo confirmes una vez con tu contador o con la
+DGI, sobre todo si algún colaborador de un negocio Cuota Fija llega a ganar
+por encima del umbral exento (~C$8,333 mensuales), para no exponerte si la
+regla real fuera distinta. Si luego quieres que esto varíe por negocio
+puntual (algunos Cuota Fija sí, otros no), dime y lo separo del régimen en un
+interruptor aparte.
 
 ---
 

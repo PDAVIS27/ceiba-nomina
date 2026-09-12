@@ -9,6 +9,7 @@ export default function IRSimulator() {
   const [retroactivos, setRetroactivos] = useState(0);
   const [viaticos, setViaticos] = useState(0);
   const [antiguedadMeses, setAntiguedadMeses] = useState(12);
+  const [exentoIR, setExentoIR] = useState(false);
 
   const d = calcularPeriodo({
     bruto: salario || 0,
@@ -17,11 +18,12 @@ export default function IRSimulator() {
     retroactivos: retroactivos || 0,
     viaticos: viaticos || 0,
     antiguedadMeses: antiguedadMeses || 0,
+    exentoIR,
   });
 
   return (
     <div>
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
         <NumField label="Salario bruto (C$)" value={salario} onChange={setSalario} />
         <NumField label="Horas extra" value={horas} onChange={setHoras} step={0.5} />
         <NumField label="Comisiones (C$)" value={comisiones} onChange={setComisiones} />
@@ -29,6 +31,10 @@ export default function IRSimulator() {
         <NumField label="Viáticos (C$)" value={viaticos} onChange={setViaticos} />
         <NumField label="Antigüedad (meses)" value={antiguedadMeses} onChange={setAntiguedadMeses} />
       </div>
+      <label className="flex items-center gap-2 text-xs text-inkdim mb-5">
+        <input type="checkbox" checked={exentoIR} onChange={(e) => setExentoIR(e.target.checked)} />
+        Simular negocio en régimen Cuota Fija (no se calcula IR laboral)
+      </label>
       <table className="w-full text-sm">
         <tbody>
           <Row label="Salario bruto" value={money(d.bruto)} />
@@ -40,7 +46,7 @@ export default function IRSimulator() {
           <Row label="Base imponible mensual" value={money(d.baseImponibleMensual)} />
           <Row label="Expectativa de renta anual (× 12)" value={money(d.expectativaAnual)} />
           <Row label="Tramo aplicable (Art. 23, Ley 822)" value={`hasta ${d.tramo.hasta === Infinity ? "∞" : money(d.tramo.hasta)}, ${(d.tramo.tasa * 100).toFixed(0)}%`} />
-          <Row label="IR mensual a retener" value={"− " + money(d.irMensual)} />
+          <Row label={exentoIR ? "IR mensual a retener (exento — Cuota Fija)" : "IR mensual a retener"} value={"− " + money(d.irMensual)} />
           <Row label="Viáticos (no gravable)" value={"+ " + money(d.viaticos)} />
           <tr className="border-t border-linestrong">
             <td className="py-2 font-semibold">Neto a pagar</td>

@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calcularPeriodo } from "@/lib/payroll";
 import { mesesEntre } from "@/lib/dateUtils";
+import { esExentoIR } from "@/lib/regimenFiscal";
 import { TERMINATION_LABELS } from "@/lib/provisiones";
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
@@ -14,6 +15,8 @@ export default async function ColaboradoresPage() {
   const session = await getServerSession(authOptions);
   const companyId = (session?.user as any)?.companyId as string;
 
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  const exentoIR = esExentoIR(company?.regimenFiscal);
   const employees = await prisma.employee.findMany({
     where: { companyId, active: true },
     orderBy: { createdAt: "asc" },
@@ -27,7 +30,7 @@ export default async function ColaboradoresPage() {
   const hoy = new Date();
   const rows = employees.map((e) => ({
     e,
-    d: calcularPeriodo({ bruto: Number(e.grossSalary), antiguedadMeses: mesesEntre(new Date(e.startDate), hoy) }),
+    d: calcularPeriodo({ bruto: Number(e.grossSalary), antiguedadMeses: mesesEntre(new Date(e.startDate), hoy), exentoIR }),
   }));
 
   return (

@@ -61,13 +61,20 @@ export function impuestoAnualSegunTabla(expectativaAnual: number): number {
   return round2(Math.max(tramo.base + (expectativaAnual - tramo.exceso) * tramo.tasa, 0));
 }
 
-export function calcularIR(brutoMensual: number): DesgloseIR {
+/**
+ * `exentoIR`: para negocios en régimen Cuota Fija (ver src/lib/regimenFiscal.ts)
+ * — a pedido explícito del proveedor, no calcula ni retiene IR laboral para
+ * ningún colaborador de ese negocio. El INSS laboral (7%) SIEMPRE se calcula
+ * igual, sin importar el régimen — es un aporte a la INSS, no un impuesto de
+ * la DGI.
+ */
+export function calcularIR(brutoMensual: number, exentoIR: boolean = false): DesgloseIR {
   const inssLaboral = round2(brutoMensual * INSS_LABORAL);
   const baseImponibleMensual = round2(brutoMensual - inssLaboral);
   const expectativaAnual = round2(baseImponibleMensual * 12);
   const tramo = TABLA_IR.find((t) => expectativaAnual <= t.hasta)!;
-  const irAnual = impuestoAnualSegunTabla(expectativaAnual);
-  const irMensual = round2(irAnual / 12);
+  const irAnual = exentoIR ? 0 : impuestoAnualSegunTabla(expectativaAnual);
+  const irMensual = exentoIR ? 0 : round2(irAnual / 12);
   const neto = round2(brutoMensual - inssLaboral - irMensual);
   return {
     bruto: brutoMensual,
@@ -228,6 +235,8 @@ export function calcularPeriodo(params: {
   antiguedadMeses?: number;
   otrasDeducciones?: number;
   otrasDeduccionesConcepto?: string | null;
+  // Negocio en régimen Cuota Fija — ver comentario de calcularIR() arriba.
+  exentoIR?: boolean;
 }): DesglosePeriodo {
   const bruto = params.bruto;
   const horasExtraCantidad = params.horasExtraCantidad || 0;
@@ -237,6 +246,7 @@ export function calcularPeriodo(params: {
   const antiguedadMeses = params.antiguedadMeses || 0;
   const otrasDeducciones = Math.max(params.otrasDeducciones || 0, 0);
   const otrasDeduccionesConcepto = otrasDeducciones > 0 ? (params.otrasDeduccionesConcepto || null) : null;
+  const exentoIR = params.exentoIR || false;
 
   const horasExtraMonto = calcularHorasExtra(bruto, horasExtraCantidad);
   const totalGravable = round2(bruto + horasExtraMonto + comisiones + retroactivos);
@@ -245,10 +255,10 @@ export function calcularPeriodo(params: {
   const baseImponibleMensual = round2(totalGravable - inssLaboral);
   const expectativaAnual = round2(baseImponibleMensual * 12);
   const tramo = TABLA_IR.find((t) => expectativaAnual <= t.hasta)!;
-  const irAnual = round2(
-    Math.max(tramo.base + (expectativaAnual - tramo.exceso) * tramo.tasa, 0)
-  );
-  const irMensual = round2(irAnual / 12);
+  const irAnual = exentoIR
+    ? 0
+    : round2(Math.max(tramo.base + (expectativaAnual - tramo.exceso) * tramo.tasa, 0));
+  const irMensual = exentoIR ? 0 : round2(irAnual / 12);
 
   const provAguinaldo = provisionAguinaldo(bruto);
   const provVacaciones = provisionVacaciones(bruto);

@@ -43,6 +43,19 @@ enum TipoPeriodo {
   AGUINALDO
 }
 
+// Figura fiscal con la que el negocio cliente está inscrito ante la DGI.
+// Es un dato informativo/documental — NO cambia el cálculo de IR laboral de
+// sus colaboradores: ese impuesto depende del salario de cada trabajador
+// (Art. 23, Ley 822) y de la relación de subordinación, no del régimen del
+// empleador. Cuota Fija, por ejemplo, sustituye el IR y el IVA del NEGOCIO
+// (persona natural, ingresos ≤ C$100,000/mes) — no exime a sus trabajadores
+// del IR laboral si su salario supera el umbral exento.
+enum RegimenFiscal {
+  GENERAL      // régimen general de rentas de actividades económicas
+  CUOTA_FIJA   // persona natural, pequeño contribuyente (DGI)
+  ZONA_FRANCA  // empresa exonerada de IR bajo régimen de zona franca
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -58,6 +71,9 @@ model Company {
   name           String
   // Usado para decidir la tasa de INSS patronal (21.5% / 22.5%).
   status         String          @default("PILOTO") // PILOTO, ACTIVO, PAUSADO
+  // Solo informativo — ver comentario de RegimenFiscal. No afecta el cálculo
+  // de nómina.
+  regimenFiscal  RegimenFiscal   @default(GENERAL)
   createdAt      DateTime        @default(now())
   users          User[]
   employees      Employee[]

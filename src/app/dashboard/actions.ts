@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calcularPeriodo } from "@/lib/payroll";
+import { esExentoIR } from "@/lib/regimenFiscal";
 import { parsearExcelColaboradores } from "@/lib/bulkImport";
 import {
   calcularLiquidacion,
@@ -87,6 +88,8 @@ export async function runPayroll(formData: FormData) {
 
   const employees = await prisma.employee.findMany({ where: { companyId, active: true } });
   if (employees.length === 0) return;
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  const exentoIR = esExentoIR(company?.regimenFiscal);
 
   const label = String(formData.get("label") || "Período sin nombre").trim();
   const { periodStart, periodEnd } = leerFechasPeriodo(formData, "/dashboard/nomina");
@@ -122,6 +125,7 @@ export async function runPayroll(formData: FormData) {
         antiguedadMeses,
         otrasDeducciones,
         otrasDeduccionesConcepto,
+        exentoIR,
       });
 
       return {
@@ -150,6 +154,8 @@ export async function runPayroll(formData: FormData) {
 
 export async function cargarPlanillaDesdeExcel(formData: FormData) {
   const companyId = await requireCompanyId();
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  const exentoIR = esExentoIR(company?.regimenFiscal);
 
   const file = formData.get("file") as File | null;
   const label = String(formData.get("label") || "Período sin nombre").trim();
@@ -241,6 +247,7 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
         antiguedadMeses,
         otrasDeducciones: f.otrasDeducciones,
         otrasDeduccionesConcepto: f.otrasDeduccionesConcepto,
+        exentoIR,
       });
       return {
         periodId: period.id,
@@ -514,7 +521,15 @@ export async function darDeBaja(formData: FormData) {
   }
 
   const antiguedadMeses = mesesEntre(new Date(employee.startDate), terminatedAt);
-  const liq = await calcularLiquidacion(employeeId, terminationType, terminatedAt, pagosPendientes, horasExtraCantidad);
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  const liq = await calcularLiquidacion(
+    employeeId,
+    terminationType,
+    terminatedAt,
+    pagosPendientes,
+    horasExtraCantidad,
+    esExentoIR(company?.regimenFiscal)
+  );
 
   const datosComunes = {
     terminationType,

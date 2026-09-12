@@ -198,11 +198,11 @@ export interface DesgloseRetencion {
  * plataforma no lleva ese acumulado interanual. Un contador debe confirmar
  * el cálculo antes de liquidar un caso real.
  */
-export function calcularRetencionIndependiente(bruto: number): DesgloseRetencion {
+export function calcularRetencionIndependiente(bruto: number, exentoIR: boolean = false): DesgloseRetencion {
   if (bruto <= 0) {
     return { bruto: 0, inss: 0, ir: 0, neto: 0 };
   }
-  const d = calcularIR(bruto);
+  const d = calcularIR(bruto, exentoIR);
   return { bruto: round2(bruto), inss: d.inssLaboral, ir: d.irMensual, neto: d.neto };
 }
 
@@ -259,7 +259,8 @@ export async function calcularLiquidacion(
   terminationType: TerminationTypeKey,
   terminatedAt: Date,
   pagosPendientes: PagoPendienteItem[] = [],
-  horasExtraCantidad: number = 0
+  horasExtraCantidad: number = 0,
+  exentoIR: boolean = false
 ): Promise<DesgloseLiquidacion> {
   const balance = await balanceProvisiones(employeeId, terminatedAt);
   const aplicaIndemnizacion = aplicaIndemnizacionPorTipo(terminationType);
@@ -271,7 +272,7 @@ export async function calcularLiquidacion(
     pagosPendientes.reduce((a, p) => a + Math.max(p.monto, 0), 0)
   );
   const gravableBruto = round2(balance.vacacionesSaldo + horasExtraMonto + pagoPendienteBrutoTotal);
-  const gravable = calcularRetencionIndependiente(gravableBruto);
+  const gravable = calcularRetencionIndependiente(gravableBruto, exentoIR);
 
   const totalIngresos = round2(balance.aguinaldoSaldo + gravableBruto + indemnizacion);
   const total = round2(balance.aguinaldoSaldo + indemnizacion + gravable.neto);

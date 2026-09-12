@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calcularPeriodo, costoPatronalMensual, inssPatronalRate, INATEC } from "@/lib/payroll";
 import { mesesEntre } from "@/lib/dateUtils";
+import { etiquetaRegimen, esExentoIR } from "@/lib/regimenFiscal";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +20,10 @@ export default async function InicioPage() {
   });
 
   const hoy = new Date();
+  const exentoIR = esExentoIR(company?.regimenFiscal);
   const totalBruto = employees.reduce((a, e) => a + Number(e.grossSalary), 0);
   const rows = employees.map((e) =>
-    calcularPeriodo({ bruto: Number(e.grossSalary), antiguedadMeses: mesesEntre(new Date(e.startDate), hoy) })
+    calcularPeriodo({ bruto: Number(e.grossSalary), antiguedadMeses: mesesEntre(new Date(e.startDate), hoy), exentoIR })
   );
   const totalDeducciones = rows.reduce((a, d) => a + d.inssLaboral + d.irMensual, 0);
   const totalNeto = rows.reduce((a, d) => a + d.netoPagar, 0);
@@ -46,7 +48,9 @@ export default async function InicioPage() {
   return (
     <div>
       <h1 className="font-serif text-3xl font-semibold mb-1">{company?.name ?? "Tu negocio"}</h1>
-      <div className="text-inkfaint text-xs font-mono mb-8">{employees.length} colaboradores activos</div>
+      <div className="text-inkfaint text-xs font-mono mb-8">
+        {employees.length} colaboradores activos · {etiquetaRegimen(company?.regimenFiscal)}
+      </div>
 
       {ultimoBorrador && (
         <div className="bg-gold/10 border border-gold rounded-xl p-4 mb-8 flex justify-between items-center flex-wrap gap-3">
@@ -98,7 +102,13 @@ export default async function InicioPage() {
                 <div className="text-inkfaint text-[10px] font-mono uppercase tracking-wide">A la DGI</div>
               </div>
               <div className="px-5 py-4">
-                <RowPago label="IR mensual retenido" sub="Art. 23, Ley 822 — retenido a colaboradores" value={money(irTotal)} />
+                {exentoIR ? (
+                  <div className="text-sm text-inkdim">
+                    No aplica — tu negocio está registrado como <strong>Cuota Fija</strong>, así que no se calcula IR laboral a tus colaboradores.
+                  </div>
+                ) : (
+                  <RowPago label="IR mensual retenido" sub="Art. 23, Ley 822 — retenido a colaboradores" value={money(irTotal)} />
+                )}
                 <div className="border-t border-line mt-3 pt-3 flex justify-between items-baseline">
                   <span className="text-sm font-medium">Total a la DGI</span>
                   <span className="font-serif text-lg font-semibold text-gold">{money(irTotal)}</span>
