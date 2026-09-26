@@ -5,11 +5,12 @@ export async function GET() {
   const datos = [
     [
       "N°", "Código colaborador", "Nombre del colaborador", "N° de cédula", "Cuenta bancaria", "Departamento",
-      "Salario mensual (C$)", "Horas extras", "Viáticos (C$)", "Retroactivos (C$)",
+      "Salario mensual (C$)", "Horas extras", "Comisiones (C$)", "Viáticos (C$)", "Retroactivos (C$)",
       "Otras deducciones (C$)", "Motivo de otras deducciones",
     ],
-    [1, "COL001", "Ana Reyes", "001-010190-0001A", "10012345678", "Cajera", 9200, 0, 0, 0, 0, ""],
-    [2, "COL002", "Carlos Espinoza", "", "", "Bodeguero", 8500, 5, 500, 0, 300, "Descuento por llegada tardía"],
+    [1, "COL001", "Ana Reyes", "001-010190-0001A", "10012345678", "Cajera", 9200, 0, 0, 0, 0, 0, ""],
+    [2, "COL002", "Carlos Espinoza", "", "", "Bodeguero", 8500, 5, 0, 500, 0, 300, "Descuento por llegada tardía"],
+    [3, "COL003", "Douglas Salgado", "", "", "Ejecutivo de Ventas", 9000, 0, 3000, 0, 0, 0, ""],
   ];
   const instrucciones = [
     ["Campo", "Descripción"],
@@ -19,8 +20,9 @@ export async function GET() {
     ["N° de cédula", "Opcional. Número de cédula de identidad del colaborador."],
     ["Cuenta bancaria", "Opcional. Número de cuenta bancaria donde se le deposita el pago."],
     ["Departamento", "Área, puesto o departamento del colaborador."],
-    ["Salario mensual (C$)", "Salario bruto mensual de referencia."],
+    ["Salario mensual (C$)", "Salario bruto mensual de referencia (sin horas extra ni comisiones)."],
     ["Horas extras", "Cantidad de horas extra de este período (recargo del 100% según el Código del Trabajo)."],
+    ["Comisiones (C$)", "Monto de comisión del período (ej. sobre ventas) — se suma a la base gravable, igual que retroactivos."],
     ["Viáticos (C$)", "Monto de viáticos del período — no gravable."],
     ["Retroactivos (C$)", "Monto retroactivo del período — se suma a la base gravable."],
     ["Otras deducciones (C$)", "Opcional. Descuento que decide tu negocio y no es de ley (error de pago, falta, llegada tardía, etc.) — se resta directo del neto a pagar, no afecta el INSS ni el IR."],
@@ -31,7 +33,7 @@ export async function GET() {
   const ws1 = XLSX.utils.aoa_to_sheet(datos);
   ws1["!cols"] = [
     { wch: 6 }, { wch: 16 }, { wch: 24 }, { wch: 18 }, { wch: 16 }, { wch: 18 },
-    { wch: 18 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 28 },
+    { wch: 18 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 28 },
   ];
   XLSX.utils.book_append_sheet(wb, ws1, "Datos de Nómina");
 

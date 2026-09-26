@@ -249,6 +249,12 @@ tradicional; la cuenta bancaria se usa en el nuevo **listado de pago** (ver
 abajo). Estos dos campos también se pueden cargar/actualizar en lote desde
 la plantilla de Excel, con las columnas "N° de cédula" y "Cuenta bancaria".
 
+La plantilla de Excel también trae una columna **"Comisiones (C$)"** (junto a
+"Horas extras") para cargar una comisión del período por colaborador — se
+suma a la base gravable exactamente igual que en el formulario a mano de
+Nómina, y aparece etiquetada como "Comisiones" (no como "Retroactivos") en su
+comprobante de pago.
+
 ### Otras deducciones (descuentos que no son de ley)
 
 Además de INSS e IR (que son de ley y siempre se calculan igual), ahora

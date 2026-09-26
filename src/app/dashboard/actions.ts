@@ -241,7 +241,7 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
       const d = calcularPeriodo({
         bruto: f.grossSalary,
         horasExtraCantidad: f.horasExtraCantidad,
-        comisiones: 0,
+        comisiones: f.comisiones,
         retroactivos: f.retroactivos,
         viaticos: f.viaticos,
         antiguedadMeses,

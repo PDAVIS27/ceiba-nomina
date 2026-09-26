@@ -8,6 +8,7 @@ export interface FilaImportada {
   role: string;
   grossSalary: number;
   horasExtraCantidad: number;
+  comisiones: number;
   viaticos: number;
   retroactivos: number;
   otrasDeducciones: number;
@@ -33,6 +34,7 @@ const ALIAS = {
     "salario mensual (c$)", "salario mensual", "salario bruto (c$)", "salario bruto", "salario",
   ],
   horasExtraCantidad: ["horas extras", "horas extra", "h. extra"],
+  comisiones: ["comisiones (c$)", "comisiones", "comision", "comisión"],
   viaticos: ["viaticos (c$)", "viáticos (c$)", "viaticos", "viáticos"],
   retroactivos: ["retroactivos (c$)", "retroactivos", "retroactivo"],
   otrasDeducciones: ["otras deducciones (c$)", "otras deducciones", "otra deduccion"],
@@ -53,6 +55,7 @@ const NOMBRE_LEGIBLE: Record<Campo, string> = {
   role: "Departamento",
   grossSalary: "Salario mensual",
   horasExtraCantidad: "Horas extras",
+  comisiones: "Comisiones",
   viaticos: "Viáticos",
   retroactivos: "Retroactivos",
   otrasDeducciones: "Otras deducciones",
@@ -163,6 +166,7 @@ export function parsearExcelColaboradores(buffer: ArrayBuffer): ResultadoImporta
       role,
       grossSalary,
       horasExtraCantidad: numero(get("horasExtraCantidad")),
+      comisiones: numero(get("comisiones")),
       viaticos: numero(get("viaticos")),
       retroactivos: numero(get("retroactivos")),
       otrasDeducciones,
