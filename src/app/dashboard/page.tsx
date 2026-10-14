@@ -23,24 +23,38 @@ export default async function InicioPage() {
   const exentoIR = esExentoIR(company?.regimenFiscal);
   const totalBruto = employees.reduce((a, e) => a + Number(e.grossSalary), 0);
   const rows = employees.map((e) =>
-    calcularPeriodo({ bruto: Number(e.grossSalary), antiguedadMeses: mesesEntre(new Date(e.startDate), hoy), exentoIR })
+    calcularPeriodo({
+      bruto: Number(e.grossSalary),
+      antiguedadMeses: mesesEntre(new Date(e.startDate), hoy),
+      exentoIR,
+      tipoContrato: e.tipoContrato,
+      acumulaPrestaciones: e.acumulaPrestaciones,
+    })
   );
+  const hayServiciosProfesionales = employees.some((e) => e.tipoContrato === "SERVICIOS_PROFESIONALES");
   const totalDeducciones = rows.reduce((a, d) => a + d.inssLaboral + d.irMensual, 0);
   const totalNeto = rows.reduce((a, d) => a + d.netoPagar, 0);
   const totalProvisiones = rows.reduce(
     (a, d) => a + d.provisionAguinaldo + d.provisionVacaciones + d.provisionIndemnizacion,
     0
   );
-  const costoPatronal = costoPatronalMensual(totalBruto, employees.length);
-  const tasaPatronal = inssPatronalRate(employees.length);
+
+  // El INSS patronal y el INATEC solo aplican a relaciones LABORALES — un
+  // colaborador de servicios profesionales no cuenta ni para la base de
+  // cálculo ni para el umbral de 50 trabajadores (Art. 1, Ley de Seguridad
+  // Social: aplica a la relación de trabajo subordinada).
+  const empleadosLaborales = employees.filter((e) => e.tipoContrato !== "SERVICIOS_PROFESIONALES");
+  const totalBrutoLaboral = empleadosLaborales.reduce((a, e) => a + Number(e.grossSalary), 0);
+  const costoPatronal = costoPatronalMensual(totalBrutoLaboral, empleadosLaborales.length);
+  const tasaPatronal = inssPatronalRate(empleadosLaborales.length);
 
   // Lo que el negocio debe remitir el mes que viene, según su planilla activa
   // actual: INSS patronal (aporte del empleador) + INSS laboral (retenido a
   // colaboradores) — ambos se pagan juntos a la INSS — más INATEC (Ley 90,
-  // también vía INSS), y por separado el IR retenido, que se declara y paga
-  // a la DGI.
-  const inssPatronalMonto = round2(totalBruto * tasaPatronal);
-  const inatecMonto = round2(totalBruto * INATEC);
+  // también vía INSS), y por separado el IR retenido / retención de
+  // servicios profesionales, que se declara y paga a la DGI.
+  const inssPatronalMonto = round2(totalBrutoLaboral * tasaPatronal);
+  const inatecMonto = round2(totalBrutoLaboral * INATEC);
   const inssLaboralTotal = round2(rows.reduce((a, d) => a + d.inssLaboral, 0));
   const irTotal = round2(rows.reduce((a, d) => a + d.irMensual, 0));
   const totalInss = round2(inssPatronalMonto + inssLaboralTotal + inatecMonto);
@@ -49,7 +63,9 @@ export default async function InicioPage() {
     <div>
       <h1 className="font-serif text-3xl font-semibold mb-1">{company?.name ?? "Tu negocio"}</h1>
       <div className="text-inkfaint text-xs font-mono mb-8">
-        {employees.length} colaboradores activos · {etiquetaRegimen(company?.regimenFiscal)}
+        {employees.length} colaboradores activos
+        {hayServiciosProfesionales && ` (${empleadosLaborales.length} laboral · ${employees.length - empleadosLaborales.length} servicios profesionales)`}
+        {" "}· {etiquetaRegimen(company?.regimenFiscal)}
       </div>
 
       {ultimoBorrador && (
@@ -69,7 +85,7 @@ export default async function InicioPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
         <Stat label="Planilla bruta" value={money(totalBruto)} />
         <Stat label="Deducciones de ley" value={money(totalDeducciones)} accent="emerald" />
-        <Stat label="Costo patronal" value={money(costoPatronal)} accent="gold" sub={`INSS ${(tasaPatronal * 100).toFixed(1)}% + INATEC 2%`} />
+        <Stat label="Costo patronal" value={money(costoPatronal)} accent="gold" sub={`INSS ${(tasaPatronal * 100).toFixed(1)}% + INATEC 2%${hayServiciosProfesionales ? " · solo LABORAL" : ""}`} />
         <Stat label="Provisiones laborales" value={money(totalProvisiones)} accent="gold" sub="Aguinaldo + vacaciones + antigüedad" />
         <Stat label="Neto a pagar" value={money(totalNeto)} />
       </div>
@@ -102,12 +118,28 @@ export default async function InicioPage() {
                 <div className="text-inkfaint text-[10px] font-mono uppercase tracking-wide">A la DGI</div>
               </div>
               <div className="px-5 py-4">
-                {exentoIR ? (
+                {exentoIR && !hayServiciosProfesionales ? (
                   <div className="text-sm text-inkdim">
                     No aplica — tu negocio está registrado como <strong>Cuota Fija</strong>, así que no se calcula IR laboral a tus colaboradores.
                   </div>
                 ) : (
-                  <RowPago label="IR mensual retenido" sub="Art. 23, Ley 822 — retenido a colaboradores" value={money(irTotal)} />
+                  <>
+                    {exentoIR && hayServiciosProfesionales && (
+                      <div className="text-xs text-inkfaint mb-2">
+                        Cuota Fija exonera el IR laboral de tus colaboradores LABORAL, pero no la retención de servicios profesionales de abajo.
+                      </div>
+                    )}
+                    {!exentoIR && (
+                      <RowPago label="IR mensual retenido" sub="Art. 23, Ley 822 — colaboradores LABORAL" value={money(round2(rows.filter((d) => !d.esServiciosProfesionales).reduce((a, d) => a + d.irMensual, 0)))} />
+                    )}
+                    {hayServiciosProfesionales && (
+                      <RowPago
+                        label="Retención servicios profesionales"
+                        sub="10% fijo — colaboradores por servicios profesionales"
+                        value={money(round2(rows.filter((d) => d.esServiciosProfesionales).reduce((a, d) => a + d.irMensual, 0)))}
+                      />
+                    )}
+                  </>
                 )}
                 <div className="border-t border-line mt-3 pt-3 flex justify-between items-baseline">
                   <span className="text-sm font-medium">Total a la DGI</span>

@@ -19,6 +19,16 @@ export const INATEC = 0.02;
 export const INSS_PATRONAL_PEQUENA = 0.215; // < 50 colaboradores
 export const INSS_PATRONAL_GRANDE = 0.225; // >= 50 colaboradores
 
+// Retención en la fuente a cuenta de IR para servicios profesionales
+// prestados por una persona natural residente (Art. 44, numeral 2.5, inciso
+// a, Reglamento de la Ley 822 — Decreto 01-2013). No es progresiva como la
+// tabla del Art. 23: es un porcentaje fijo sobre todo lo pagado, y sustituye
+// por completo el INSS y la tabla de IR laboral para un colaborador en
+// TipoContrato.SERVICIOS_PROFESIONALES (ver ese enum en schema.prisma).
+// Un contador debe confirmar esta tasa antes de operar con clientes reales,
+// igual que el resto de las tasas de este archivo.
+export const RETENCION_SERVICIOS_PROFESIONALES = 0.10;
+
 export interface TramoIR {
   hasta: number;
   base: number;
@@ -190,6 +200,8 @@ export function provisionIndemnizacionPorDias(
   return round2((salarioMensual / 30) * (diasPorAnio / 360) * dias);
 }
 
+export type TipoContratoKey = "LABORAL" | "SERVICIOS_PROFESIONALES";
+
 export interface DesglosePeriodo {
   bruto: number;
   horasExtraCantidad: number;
@@ -211,6 +223,11 @@ export interface DesglosePeriodo {
   otrasDeducciones: number;
   otrasDeduccionesConcepto: string | null;
   netoPagar: number;
+  // true si este período se calculó como servicios profesionales (retención
+  // fija de 10%, sin INSS) en vez del cálculo laboral de siempre — útil para
+  // que la interfaz muestre la etiqueta correcta sin tener que repetir la
+  // comparación de tipoContrato en cada página.
+  esServiciosProfesionales: boolean;
 }
 
 /**
@@ -237,6 +254,14 @@ export function calcularPeriodo(params: {
   otrasDeduccionesConcepto?: string | null;
   // Negocio en régimen Cuota Fija — ver comentario de calcularIR() arriba.
   exentoIR?: boolean;
+  // LABORAL (por defecto) o SERVICIOS_PROFESIONALES — ver TipoContrato en
+  // schema.prisma. SERVICIOS_PROFESIONALES ignora exentoIR, acumulaPrestaciones
+  // y la tabla progresiva: siempre retiene el 10% fijo, sin INSS, sin provisiones.
+  tipoContrato?: TipoContratoKey;
+  // Si acumula aguinaldo/vacaciones/indemnización este período. Por defecto
+  // true para LABORAL (lo que corresponde por ley); se ignora por completo
+  // para SERVICIOS_PROFESIONALES, que nunca acumula.
+  acumulaPrestaciones?: boolean;
 }): DesglosePeriodo {
   const bruto = params.bruto;
   const horasExtraCantidad = params.horasExtraCantidad || 0;
@@ -247,22 +272,44 @@ export function calcularPeriodo(params: {
   const otrasDeducciones = Math.max(params.otrasDeducciones || 0, 0);
   const otrasDeduccionesConcepto = otrasDeducciones > 0 ? (params.otrasDeduccionesConcepto || null) : null;
   const exentoIR = params.exentoIR || false;
+  const esServiciosProfesionales = params.tipoContrato === "SERVICIOS_PROFESIONALES";
+  const acumulaPrestaciones = esServiciosProfesionales ? false : (params.acumulaPrestaciones ?? true);
 
   const horasExtraMonto = calcularHorasExtra(bruto, horasExtraCantidad);
   const totalGravable = round2(bruto + horasExtraMonto + comisiones + retroactivos);
 
-  const inssLaboral = round2(totalGravable * INSS_LABORAL);
-  const baseImponibleMensual = round2(totalGravable - inssLaboral);
-  const expectativaAnual = round2(baseImponibleMensual * 12);
-  const tramo = TABLA_IR.find((t) => expectativaAnual <= t.hasta)!;
-  const irAnual = exentoIR
-    ? 0
-    : round2(Math.max(tramo.base + (expectativaAnual - tramo.exceso) * tramo.tasa, 0));
-  const irMensual = exentoIR ? 0 : round2(irAnual / 12);
+  let inssLaboral: number;
+  let baseImponibleMensual: number;
+  let expectativaAnual: number;
+  let tramo: TramoIR;
+  let irAnual: number;
+  let irMensual: number;
 
-  const provAguinaldo = provisionAguinaldo(bruto);
-  const provVacaciones = provisionVacaciones(bruto);
-  const provIndemnizacion = provisionIndemnizacion(bruto, antiguedadMeses);
+  if (esServiciosProfesionales) {
+    // Sin relación de subordinación: no hay INSS, y la retención es un
+    // porcentaje fijo sobre todo lo pagado, no la tabla progresiva del
+    // Art. 23 (esa tabla es solo para rentas del trabajo en relación de
+    // dependencia). Ver RETENCION_SERVICIOS_PROFESIONALES arriba.
+    inssLaboral = 0;
+    baseImponibleMensual = totalGravable;
+    expectativaAnual = 0;
+    tramo = { hasta: Infinity, base: 0, tasa: RETENCION_SERVICIOS_PROFESIONALES, exceso: 0 };
+    irMensual = round2(totalGravable * RETENCION_SERVICIOS_PROFESIONALES);
+    irAnual = round2(irMensual * 12);
+  } else {
+    inssLaboral = round2(totalGravable * INSS_LABORAL);
+    baseImponibleMensual = round2(totalGravable - inssLaboral);
+    expectativaAnual = round2(baseImponibleMensual * 12);
+    tramo = TABLA_IR.find((t) => expectativaAnual <= t.hasta)!;
+    irAnual = exentoIR
+      ? 0
+      : round2(Math.max(tramo.base + (expectativaAnual - tramo.exceso) * tramo.tasa, 0));
+    irMensual = exentoIR ? 0 : round2(irAnual / 12);
+  }
+
+  const provAguinaldo = acumulaPrestaciones ? provisionAguinaldo(bruto) : 0;
+  const provVacaciones = acumulaPrestaciones ? provisionVacaciones(bruto) : 0;
+  const provIndemnizacion = acumulaPrestaciones ? provisionIndemnizacion(bruto, antiguedadMeses) : 0;
 
   const totalDevengado = round2(totalGravable + viaticos);
   // Otras deducciones (no son de ley: error de pago, faltas, llegadas tardías,
@@ -291,6 +338,7 @@ export function calcularPeriodo(params: {
     otrasDeducciones,
     otrasDeduccionesConcepto,
     netoPagar,
+    esServiciosProfesionales,
   };
 }
 

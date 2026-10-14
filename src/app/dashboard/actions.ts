@@ -12,6 +12,8 @@ import {
   type TerminationTypeKey,
   type PagoPendienteItem,
 } from "@/lib/provisiones";
+import { generarPDFPreplanilla, generarPDFListadoPago } from "@/lib/pdfPreplanilla";
+import { enviarPDFPorCorreo } from "@/lib/email";
 import { redirect } from "next/navigation";
 
 import { mesesEntre } from "@/lib/dateUtils";
@@ -36,6 +38,11 @@ export async function addEmployee(formData: FormData) {
   const grossSalary = Number(formData.get("grossSalary") || 0);
   const startDateRaw = String(formData.get("startDate") || "");
   const startDate = startDateRaw ? new Date(startDateRaw) : new Date();
+  const tipoContratoRaw = String(formData.get("tipoContrato") || "LABORAL");
+  const tipoContrato = tipoContratoRaw === "SERVICIOS_PROFESIONALES" ? "SERVICIOS_PROFESIONALES" : "LABORAL";
+  // Un colaborador de servicios profesionales nunca acumula prestaciones —
+  // la casilla del formulario no aplica para él y se ignora.
+  const acumulaPrestaciones = tipoContrato === "SERVICIOS_PROFESIONALES" ? false : formData.get("acumulaPrestaciones") !== null;
   if (!fullName || !role || grossSalary <= 0) return;
   await prisma.employee.create({
     data: {
@@ -46,9 +53,33 @@ export async function addEmployee(formData: FormData) {
       role,
       grossSalary,
       startDate,
+      tipoContrato,
+      acumulaPrestaciones,
     },
   });
   redirect("/dashboard/colaboradores?ok=1");
+}
+
+/**
+ * Cambia el tipo de contrato y/o si acumula prestaciones de un colaborador
+ * ya existente — desde su página de detalle. No toca nada más (salario,
+ * nombre, etc. se editan con la carga de Excel o directo en la base).
+ */
+export async function actualizarTipoContrato(formData: FormData) {
+  const companyId = await requireCompanyId();
+  const employeeId = String(formData.get("employeeId") || "");
+  const employee = await getOwnEmployee(companyId, employeeId);
+  if (!employee) return;
+
+  const tipoContratoRaw = String(formData.get("tipoContrato") || "LABORAL");
+  const tipoContrato = tipoContratoRaw === "SERVICIOS_PROFESIONALES" ? "SERVICIOS_PROFESIONALES" : "LABORAL";
+  const acumulaPrestaciones = tipoContrato === "SERVICIOS_PROFESIONALES" ? false : formData.get("acumulaPrestaciones") !== null;
+
+  await prisma.employee.update({
+    where: { id: employeeId },
+    data: { tipoContrato, acumulaPrestaciones },
+  });
+  redirect(`/dashboard/colaboradores/${employeeId}?ok=config`);
 }
 
 /**
@@ -126,6 +157,8 @@ export async function runPayroll(formData: FormData) {
         otrasDeducciones,
         otrasDeduccionesConcepto,
         exentoIR,
+        tipoContrato: e.tipoContrato,
+        acumulaPrestaciones: e.acumulaPrestaciones,
       });
 
       return {
@@ -185,18 +218,18 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
   const hoy = new Date();
 
   for (const f of filas) {
-    let empleado: { id: string; startDate: Date } | null = null;
+    let empleado: { id: string; startDate: Date; tipoContrato: "LABORAL" | "SERVICIOS_PROFESIONALES"; acumulaPrestaciones: boolean } | null = null;
 
     if (f.externalCode) {
       empleado = await prisma.employee.findUnique({
         where: { companyId_externalCode: { companyId, externalCode: f.externalCode } },
-        select: { id: true, startDate: true },
+        select: { id: true, startDate: true, tipoContrato: true, acumulaPrestaciones: true },
       });
     }
     if (!empleado) {
       empleado = await prisma.employee.findFirst({
         where: { companyId, fullName: { equals: f.fullName, mode: "insensitive" } },
-        select: { id: true, startDate: true },
+        select: { id: true, startDate: true, tipoContrato: true, acumulaPrestaciones: true },
       });
     }
 
@@ -226,11 +259,20 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
           startDate: f.startDate ?? hoy,
         },
       });
-      empleado = { id: nuevo.id, startDate: nuevo.startDate };
+      empleado = {
+        id: nuevo.id,
+        startDate: nuevo.startDate,
+        tipoContrato: nuevo.tipoContrato,
+        acumulaPrestaciones: nuevo.acumulaPrestaciones,
+      };
     }
 
     (f as any)._employeeId = empleado.id;
     (f as any)._startDate = empleado.startDate;
+    // La plantilla de Excel no trae tipo de contrato — se respeta lo que el
+    // colaborador ya tenía configurado (o LABORAL por defecto si es nuevo).
+    (f as any)._tipoContrato = empleado.tipoContrato;
+    (f as any)._acumulaPrestaciones = empleado.acumulaPrestaciones;
   }
 
   const period = await prisma.payrollPeriod.create({ data: { companyId, label, periodStart, periodEnd } });
@@ -248,6 +290,8 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
         otrasDeducciones: f.otrasDeducciones,
         otrasDeduccionesConcepto: f.otrasDeduccionesConcepto,
         exentoIR,
+        tipoContrato: f._tipoContrato,
+        acumulaPrestaciones: f._acumulaPrestaciones,
       });
       return {
         periodId: period.id,
@@ -528,7 +572,8 @@ export async function darDeBaja(formData: FormData) {
     terminatedAt,
     pagosPendientes,
     horasExtraCantidad,
-    esExentoIR(company?.regimenFiscal)
+    esExentoIR(company?.regimenFiscal),
+    employee.tipoContrato
   );
 
   const datosComunes = {
@@ -598,4 +643,114 @@ export async function reingresarColaborador(formData: FormData) {
     }),
   ]);
   redirect(`/dashboard/colaboradores/${employeeId}?ok=reingreso`);
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Envía por correo (vía Resend, ver src/lib/email.ts) el mismo PDF que
+ * generan /api/preplanilla y /api/listado-pago — reconstruye el PDF con los
+ * mismos datos en vez de pegarle a esos endpoints, para mandarlo como
+ * adjunto en el correo. Requiere RESEND_API_KEY configurada en Vercel; si
+ * falta, enviarPDFPorCorreo devuelve un error claro en vez de fallar feo.
+ */
+export async function enviarPlanillaPorCorreo(formData: FormData) {
+  const companyId = await requireCompanyId();
+  const periodId = String(formData.get("periodId") || "");
+  const destinatario = String(formData.get("destinatario") || "").trim();
+  const documento = String(formData.get("documento") || "preplanilla"); // "preplanilla" | "listado"
+  const mensajePersonal = String(formData.get("mensaje") || "").trim();
+
+  if (!EMAIL_RE.test(destinatario)) {
+    redirect(
+      `/dashboard/historicos?periodo=${periodId}&correoError=${encodeURIComponent("Ingresa un correo válido.")}`
+    );
+  }
+
+  const period = await prisma.payrollPeriod.findUnique({
+    where: { id: periodId },
+    include: { payslips: { include: { employee: true } }, company: true },
+  });
+  if (!period || period.companyId !== companyId) {
+    redirect(`/dashboard/historicos?correoError=${encodeURIComponent("No encontré ese período.")}`);
+  }
+
+  let bytes: Uint8Array;
+  let nombreArchivo: string;
+  let etiquetaDocumento: string;
+
+  if (documento === "listado") {
+    if (period!.status !== "APROBADA") {
+      redirect(
+        `/dashboard/historicos?periodo=${periodId}&correoError=${encodeURIComponent(
+          "El listado de pago solo está disponible para planillas ya aprobadas."
+        )}`
+      );
+    }
+    bytes = await generarPDFListadoPago({
+      empresa: period!.company.name,
+      periodo: period!.label,
+      estado: period!.status as "BORRADOR" | "APROBADA",
+      generadoEl: new Date(),
+      filas: period!.payslips.map((ps) => ({
+        nombre: ps.employee.fullName,
+        cedula: ps.employee.cedula,
+        cuentaBancaria: ps.employee.cuentaBancaria,
+        neto: Number(ps.netPay),
+      })),
+    });
+    nombreArchivo = `listado-pago-${period!.label.replace(/[^a-z0-9]+/gi, "-")}.pdf`;
+    etiquetaDocumento = "listado de pago";
+  } else {
+    bytes = await generarPDFPreplanilla({
+      empresa: period!.company.name,
+      periodo: period!.label,
+      estado: period!.status as "BORRADOR" | "APROBADA",
+      generadoEl: period!.createdAt,
+      aprobadoEl: period!.approvedAt,
+      tipoPeriodo: period!.tipo as "NOMINA" | "AGUINALDO",
+      filas: period!.payslips.map((ps) => ({
+        nombre: ps.employee.fullName,
+        codigo: ps.employee.externalCode,
+        cedula: ps.employee.cedula,
+        fechaIngreso: ps.employee.startDate,
+        puesto: ps.employee.role,
+        bruto: Number(ps.grossSalary),
+        horasExtraCantidad: Number(ps.horasExtraCantidad),
+        horasExtraMonto: Number(ps.horasExtraMonto),
+        comisiones: Number(ps.comisiones),
+        retroactivos: Number(ps.retroactivos),
+        viaticos: Number(ps.viaticos),
+        otrasDeducciones: Number(ps.otrasDeducciones),
+        otrasDeduccionesConcepto: ps.otrasDeduccionesConcepto,
+        inss: Number(ps.inssLaboral),
+        ir: Number(ps.irMensual),
+        neto: Number(ps.netPay),
+        esServiciosProfesionales: ps.employee.tipoContrato === "SERVICIOS_PROFESIONALES",
+      })),
+    });
+    nombreArchivo = `${period!.status === "BORRADOR" ? "preplanilla" : "planilla"}-${period!.label.replace(/[^a-z0-9]+/gi, "-")}.pdf`;
+    etiquetaDocumento = period!.status === "BORRADOR" ? "preplanilla" : "planilla";
+  }
+
+  const asunto = `${period!.company.name} — ${etiquetaDocumento}: ${period!.label}`;
+  const mensaje =
+    (mensajePersonal ? mensajePersonal + "\n\n" : "") +
+    `Adjunto el PDF de ${etiquetaDocumento} del período "${period!.label}" de ${period!.company.name}.\n\n— Enviado desde Ceiba`;
+
+  const resultado = await enviarPDFPorCorreo({
+    destinatario,
+    asunto,
+    mensaje,
+    nombreArchivo,
+    contenidoPDF: bytes,
+  });
+
+  if (!resultado.ok) {
+    redirect(
+      `/dashboard/historicos?periodo=${periodId}&correoError=${encodeURIComponent(resultado.error || "No se pudo enviar el correo.")}`
+    );
+  }
+
+  redirect(`/dashboard/historicos?periodo=${periodId}&correoOk=${encodeURIComponent(destinatario)}`);
 }

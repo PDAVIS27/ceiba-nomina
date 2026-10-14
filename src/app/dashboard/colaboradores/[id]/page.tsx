@@ -11,6 +11,7 @@ import {
   registrarVacacionesTomadas,
   darDeBaja,
   reingresarColaborador,
+  actualizarTipoContrato,
 } from "@/app/dashboard/actions";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ const MENSAJES_OK: Record<string, string> = {
   vacaciones: "Se registraron los días de vacaciones tomados.",
   baja: "Se dio de baja al colaborador y se calculó su liquidación.",
   reingreso: "Se reingresó al colaborador.",
+  config: "Se actualizó el tipo de contrato del colaborador.",
 };
 
 export default async function ColaboradorDetallePage({
@@ -88,6 +90,62 @@ export default async function ColaboradorDetallePage({
       )}
       {searchParams.error && (
         <div className="bg-lava/10 border border-lava rounded-lg p-3 mb-6 text-sm">{searchParams.error}</div>
+      )}
+
+      {employee.active && (
+        <section className="bg-panel border border-line rounded-xl p-6 mb-8">
+          <h3 className="font-serif text-lg font-semibold mb-1">Tipo de contrato</h3>
+          <p className="text-inkdim text-sm mb-4">
+            Servicios profesionales no calcula INSS ni la tabla progresiva de IR — retiene un 10% fijo, y nunca
+            acumula aguinaldo, vacaciones ni antigüedad. Es una relación civil/mercantil, no laboral; confirma con
+            un abogado si hay duda sobre cuál corresponde a un caso real (el nombre que le des aquí no decide la
+            naturaleza legal de la relación si en la práctica hay subordinación).
+          </p>
+          <form action={actualizarTipoContrato} className="flex flex-wrap gap-3 items-end">
+            <input type="hidden" name="employeeId" value={employee.id} />
+            <div>
+              <label className="block text-xs text-inkdim mb-1.5">Tipo de contrato</label>
+              <select
+                name="tipoContrato"
+                defaultValue={employee.tipoContrato}
+                id={`tipoContrato-${employee.id}`}
+                className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm w-72"
+              >
+                <option value="LABORAL">Laboral (planilla, con prestaciones)</option>
+                <option value="SERVICIOS_PROFESIONALES">Servicios profesionales (honorarios, 10% retención)</option>
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-inkdim pb-2.5">
+              <input
+                type="checkbox"
+                name="acumulaPrestaciones"
+                defaultChecked={employee.acumulaPrestaciones}
+                disabled={employee.tipoContrato === "SERVICIOS_PROFESIONALES"}
+                className="accent-emerald"
+              />
+              Acumula aguinaldo / vacaciones / antigüedad
+              {employee.tipoContrato === "SERVICIOS_PROFESIONALES" && " (no aplica)"}
+            </label>
+            <SubmitButton className="px-4 py-2.5 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium" pendingText="Guardando…">
+              Guardar
+            </SubmitButton>
+          </form>
+        </section>
+      )}
+
+      {employee.tipoContrato === "SERVICIOS_PROFESIONALES" && (
+        <div className="bg-panel/60 border border-line rounded-xl px-5 py-3 mb-4 text-xs text-inkdim">
+          Este colaborador es de <strong>servicios profesionales</strong> — no acumula aguinaldo, vacaciones ni
+          antigüedad, así que los saldos de abajo se mantienen en cero.
+        </div>
+      )}
+      {employee.tipoContrato !== "SERVICIOS_PROFESIONALES" && !employee.acumulaPrestaciones && (
+        <div className="bg-lava/10 border border-lava/40 rounded-xl px-5 py-3 mb-4 text-xs text-inkdim">
+          Este colaborador tiene la acumulación de prestaciones <strong>apagada manualmente</strong> — los saldos de
+          abajo se mantienen en cero aunque sea un colaborador laboral. Por ley sigue teniendo derecho a aguinaldo,
+          vacaciones e indemnización; esto solo apaga el cálculo dentro de Ceiba. Actívalo arriba en "Tipo de
+          contrato" si el negocio quiere que la plataforma vuelva a llevar la cuenta.
+        </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -334,12 +392,17 @@ export default async function ColaboradorDetallePage({
           {/* Deducciones: vacaciones + pagos pendientes se suman en UNA base gravable y la retención se calcula una sola vez sobre esa suma (aguinaldo e indemnización quedan fuera, están exentos). */}
           <div className="border-t border-line pt-4 mb-4">
             <div className="text-xs text-inkfaint uppercase font-mono mb-2">
-              Deducciones — INSS e IR calculados sobre vacaciones + horas extra + pagos pendientes juntos
+              Deducciones — {employee.tipoContrato === "SERVICIOS_PROFESIONALES" ? "retención del 10%" : "INSS e IR"} calculados sobre vacaciones + horas extra + pagos pendientes juntos
               ({money(Number(liquidacion.gravableBruto))} gravable)
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
-              <Detalle label="Seguro Social (INSS 7%)" value={"− " + money(Number(liquidacion.gravableInss))} />
-              <Detalle label="Impuesto sobre la renta (IR)" value={"− " + money(Number(liquidacion.gravableIr))} />
+              {employee.tipoContrato !== "SERVICIOS_PROFESIONALES" && (
+                <Detalle label="Seguro Social (INSS 7%)" value={"− " + money(Number(liquidacion.gravableInss))} />
+              )}
+              <Detalle
+                label={employee.tipoContrato === "SERVICIOS_PROFESIONALES" ? "Retención servicios profesionales (10%)" : "Impuesto sobre la renta (IR)"}
+                value={"− " + money(Number(liquidacion.gravableIr))}
+              />
               <Detalle
                 label="Total deducciones"
                 value={"− " + money(Number(liquidacion.gravableInss) + Number(liquidacion.gravableIr))}

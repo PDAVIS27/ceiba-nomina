@@ -27,6 +27,8 @@ import {
   provisionAguinaldoPorDias,
   provisionVacacionesPorDias,
   provisionIndemnizacionPorDias,
+  RETENCION_SERVICIOS_PROFESIONALES,
+  type TipoContratoKey,
 } from "@/lib/payroll";
 import { mesesEntre, diasEntre360 } from "@/lib/dateUtils";
 
@@ -125,7 +127,12 @@ export async function balanceProvisiones(employeeId: string, hasta: Date = new D
   let vacacionesProrrateo = 0;
   let indemnizacionProrrateo = 0;
 
-  if (employee) {
+  // Servicios profesionales nunca acumula, y un colaborador LABORAL puede
+  // tener la acumulación apagada a mano (ver Employee.acumulaPrestaciones) —
+  // en ambos casos no se prorratea nada del tramo final.
+  const acumula = employee ? employee.tipoContrato !== "SERVICIOS_PROFESIONALES" && employee.acumulaPrestaciones : false;
+
+  if (employee && acumula) {
     const fechasCobertura = payslips.map((p) => p.period.periodEnd ?? p.createdAt);
     const ultimaFechaCubierta =
       fechasCobertura.length > 0 ? new Date(Math.max(...fechasCobertura.map((d) => d.getTime()))) : null;
@@ -198,9 +205,19 @@ export interface DesgloseRetencion {
  * plataforma no lleva ese acumulado interanual. Un contador debe confirmar
  * el cálculo antes de liquidar un caso real.
  */
-export function calcularRetencionIndependiente(bruto: number, exentoIR: boolean = false): DesgloseRetencion {
+export function calcularRetencionIndependiente(
+  bruto: number,
+  exentoIR: boolean = false,
+  tipoContrato: TipoContratoKey = "LABORAL"
+): DesgloseRetencion {
   if (bruto <= 0) {
     return { bruto: 0, inss: 0, ir: 0, neto: 0 };
+  }
+  if (tipoContrato === "SERVICIOS_PROFESIONALES") {
+    // Mismo criterio que calcularPeriodo(): sin INSS, retención fija del
+    // 10% en vez de la tabla progresiva (ver RETENCION_SERVICIOS_PROFESIONALES).
+    const ir = round2(bruto * RETENCION_SERVICIOS_PROFESIONALES);
+    return { bruto: round2(bruto), inss: 0, ir, neto: round2(bruto - ir) };
   }
   const d = calcularIR(bruto, exentoIR);
   return { bruto: round2(bruto), inss: d.inssLaboral, ir: d.irMensual, neto: d.neto };
@@ -260,10 +277,15 @@ export async function calcularLiquidacion(
   terminatedAt: Date,
   pagosPendientes: PagoPendienteItem[] = [],
   horasExtraCantidad: number = 0,
-  exentoIR: boolean = false
+  exentoIR: boolean = false,
+  tipoContrato: TipoContratoKey = "LABORAL"
 ): Promise<DesgloseLiquidacion> {
   const balance = await balanceProvisiones(employeeId, terminatedAt);
-  const aplicaIndemnizacion = aplicaIndemnizacionPorTipo(terminationType);
+  // Un colaborador de servicios profesionales nunca acumula indemnización
+  // (no es un derecho laboral del Código del Trabajo para este tipo de
+  // contrato), sin importar el motivo de la baja.
+  const aplicaIndemnizacion =
+    tipoContrato === "SERVICIOS_PROFESIONALES" ? false : aplicaIndemnizacionPorTipo(terminationType);
   const indemnizacion = aplicaIndemnizacion ? balance.indemnizacionAcumulada : 0;
 
   const horasExtraMonto = round2(calcularHorasExtra(balance.salarioActual, Math.max(horasExtraCantidad, 0)));
@@ -272,7 +294,7 @@ export async function calcularLiquidacion(
     pagosPendientes.reduce((a, p) => a + Math.max(p.monto, 0), 0)
   );
   const gravableBruto = round2(balance.vacacionesSaldo + horasExtraMonto + pagoPendienteBrutoTotal);
-  const gravable = calcularRetencionIndependiente(gravableBruto, exentoIR);
+  const gravable = calcularRetencionIndependiente(gravableBruto, exentoIR, tipoContrato);
 
   const totalIngresos = round2(balance.aguinaldoSaldo + gravableBruto + indemnizacion);
   const total = round2(balance.aguinaldoSaldo + indemnizacion + gravable.neto);

@@ -35,6 +35,7 @@ export async function GET(_req: Request, { params }: { params: { payslipId: stri
     inss: Number(ps.inssLaboral),
     ir: Number(ps.irMensual),
     neto: Number(ps.netPay),
+    esServiciosProfesionales: ps.employee.tipoContrato === "SERVICIOS_PROFESIONALES",
   });
 
   const filename = `comprobante-${ps.employee.fullName.replace(/[^a-z0-9]+/gi, "-")}-${ps.period.label.replace(/[^a-z0-9]+/gi, "-")}.pdf`;

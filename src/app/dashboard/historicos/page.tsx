@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SubmitButton from "@/components/SubmitButton";
-import { aprobarPlanilla, eliminarBorrador } from "@/app/dashboard/actions";
+import { aprobarPlanilla, eliminarBorrador, enviarPlanillaPorCorreo } from "@/app/dashboard/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,8 @@ export default async function HistoricosPage({
     agregados?: string;
     omitidos?: string;
     omitidosDetalle?: string;
+    correoOk?: string;
+    correoError?: string;
   };
 }) {
   let omitidosDetalle: string[] = [];
@@ -91,6 +93,15 @@ export default async function HistoricosPage({
             </ul>
           )}
         </div>
+      )}
+
+      {searchParams.correoOk && (
+        <div className="bg-emerald/10 border border-emerald rounded-lg p-3 mb-6 text-sm">
+          Se envió el PDF por correo a <strong>{searchParams.correoOk}</strong>.
+        </div>
+      )}
+      {searchParams.correoError && (
+        <div className="bg-lava/10 border border-lava rounded-lg p-3 mb-6 text-sm">{searchParams.correoError}</div>
       )}
 
       {periods.length === 0 && (
@@ -231,6 +242,46 @@ export default async function HistoricosPage({
                 )}
               </div>
             </div>
+
+            <details className="border border-line rounded-lg px-4 py-3 mb-5 group">
+              <summary className="cursor-pointer text-sm text-inkdim hover:text-gold transition list-none flex items-center gap-2">
+                <span className="text-inkfaint text-xs group-open:rotate-90 transition-transform">▸</span>
+                Enviar por correo
+              </summary>
+              <form action={enviarPlanillaPorCorreo} className="flex flex-wrap gap-3 items-end mt-4">
+                <input type="hidden" name="periodId" value={selectedPeriod.id} />
+                <div>
+                  <label className="block text-xs text-inkdim mb-1.5">Correo del destinatario</label>
+                  <input
+                    name="destinatario" type="email" required placeholder="cliente@negocio.com"
+                    className="w-64 bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-inkdim mb-1.5">Documento</label>
+                  <select name="documento" className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
+                    <option value="preplanilla">
+                      {selectedPeriod.status === "BORRADOR" ? "Preplanilla (PDF)" : "Planilla (PDF)"}
+                    </option>
+                    {selectedPeriod.status === "APROBADA" && <option value="listado">Listado de pago (PDF)</option>}
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[220px]">
+                  <label className="block text-xs text-inkdim mb-1.5">Mensaje (opcional)</label>
+                  <input
+                    name="mensaje" type="text" placeholder="Ej. Aquí está la nómina de este período para tu revisión."
+                    className="w-full bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+                <SubmitButton className="px-4 py-2.5 rounded-lg bg-gold text-[#1b1500] text-sm font-medium" pendingText="Enviando…">
+                  Enviar
+                </SubmitButton>
+              </form>
+              <p className="text-inkfaint text-xs mt-3">
+                Se manda como adjunto en PDF, igual al que descargas arriba. Requiere tener configurada la variable
+                RESEND_API_KEY en Vercel — si no, te avisa aquí en vez de fallar en silencio.
+              </p>
+            </details>
 
             <div className="space-y-3">
               {selectedPeriod.payslips.map((ps) => {

@@ -30,7 +30,13 @@ export default async function ColaboradoresPage() {
   const hoy = new Date();
   const rows = employees.map((e) => ({
     e,
-    d: calcularPeriodo({ bruto: Number(e.grossSalary), antiguedadMeses: mesesEntre(new Date(e.startDate), hoy), exentoIR }),
+    d: calcularPeriodo({
+      bruto: Number(e.grossSalary),
+      antiguedadMeses: mesesEntre(new Date(e.startDate), hoy),
+      exentoIR,
+      tipoContrato: e.tipoContrato,
+      acumulaPrestaciones: e.acumulaPrestaciones,
+    }),
   }));
 
   return (
@@ -46,12 +52,30 @@ export default async function ColaboradoresPage() {
           <Field name="role" label="Puesto / Departamento" placeholder="Ej. Cajera" />
           <Field name="grossSalary" label="Salario bruto (C$)" type="number" placeholder="9200" />
           <Field name="startDate" label="Fecha de ingreso" type="date" />
+          <div>
+            <label className="block text-xs text-inkdim mb-1.5">Tipo de contrato</label>
+            <select
+              name="tipoContrato"
+              defaultValue="LABORAL"
+              className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm w-56"
+            >
+              <option value="LABORAL">Laboral (planilla, con prestaciones)</option>
+              <option value="SERVICIOS_PROFESIONALES">Servicios profesionales (honorarios, 10% retención)</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-inkdim pb-2.5">
+            <input type="checkbox" name="acumulaPrestaciones" defaultChecked className="accent-emerald" />
+            Acumula aguinaldo / vacaciones / antigüedad
+          </label>
           <SubmitButton className="px-5 py-3 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium">
             Agregar
           </SubmitButton>
         </form>
         <p className="text-inkfaint text-xs mt-3">
           ¿Muchos colaboradores a la vez? Súbelos desde Excel en <a href="/dashboard/nomina" className="text-gold">Correr nómina</a>.
+          Un colaborador de <strong>servicios profesionales</strong> no acumula prestaciones (la casilla se ignora para él) — es
+          una relación civil/mercantil sin subordinación, no un contrato laboral; confirma con un abogado si tienes dudas
+          sobre cuál aplica a un caso real.
         </p>
       </section>
 
@@ -62,8 +86,8 @@ export default async function ColaboradoresPage() {
             <tr className="text-inkfaint text-xs uppercase font-mono text-left border-b border-linestrong">
               <th className="pb-2">Colaborador</th>
               <th className="pb-2 text-right">Bruto</th>
-              <th className="pb-2 text-right">INSS 7%</th>
-              <th className="pb-2 text-right">IR</th>
+              <th className="pb-2 text-right">INSS</th>
+              <th className="pb-2 text-right">IR / Retención</th>
               <th className="pb-2 text-right">Neto</th>
               <th className="pb-2 text-right">Ingreso</th>
               <th className="pb-2"></th>
@@ -76,11 +100,13 @@ export default async function ColaboradoresPage() {
                   <div className="font-medium">{e.fullName}</div>
                   <div className="text-xs text-inkfaint">
                     {e.role} {e.externalCode && `· ${e.externalCode}`} {e.cedula && `· ${e.cedula}`} {e.cuentaBancaria && `· Cta. ${e.cuentaBancaria}`}
+                    {d.esServiciosProfesionales && <span className="text-gold"> · Servicios profesionales</span>}
+                    {!d.esServiciosProfesionales && !e.acumulaPrestaciones && <span className="text-lava"> · No acumula prestaciones</span>}
                   </div>
                 </td>
                 <td className="py-3 text-right font-mono">{money(d.bruto)}</td>
-                <td className="py-3 text-right font-mono">{money(d.inssLaboral)}</td>
-                <td className="py-3 text-right font-mono">{money(d.irMensual)}</td>
+                <td className="py-3 text-right font-mono">{d.esServiciosProfesionales ? "—" : money(d.inssLaboral)}</td>
+                <td className="py-3 text-right font-mono">{money(d.irMensual)}{d.esServiciosProfesionales && <span className="text-inkfaint text-[10px]"> (10%)</span>}</td>
                 <td className="py-3 text-right font-mono">{money(d.netoPagar)}</td>
                 <td className="py-3 text-right text-xs text-inkfaint font-mono">
                   {new Date(e.startDate).toLocaleDateString("es-NI")}

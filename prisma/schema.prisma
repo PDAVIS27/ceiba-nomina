@@ -43,6 +43,37 @@ enum TipoPeriodo {
   AGUINALDO
 }
 
+// Naturaleza jurídica de la relación con el colaborador — NO es solo una
+// etiqueta: cambia por completo cómo se calcula su pago.
+//
+// LABORAL: relación de trabajo subordinada (Código del Trabajo, Ley 185).
+// Aplica el cálculo de siempre: INSS laboral 7%, tabla progresiva de IR
+// (Art. 23, Ley 822), y acumula aguinaldo/vacaciones/indemnización por
+// antigüedad (ver acumulaPrestaciones más abajo).
+//
+// SERVICIOS_PROFESIONALES: contrato civil/mercantil de prestación de
+// servicios (no hay relación de subordinación). NO se calcula INSS (ni
+// laboral ni patronal) ni la tabla progresiva de IR laboral — en su lugar se
+// retiene un 10% fijo sobre lo pagado, que es la alícuota de retención en la
+// fuente para servicios profesionales prestados por una persona natural
+// residente (Art. 44, numeral 2.5, inciso a, Reglamento de la Ley 822,
+// Decreto 01-2013). Tampoco acumula aguinaldo, vacaciones ni indemnización
+// por antigüedad: son derechos laborales del Código del Trabajo (Art. 2 y 19
+// CT) que no corresponden a quien presta un servicio de forma independiente.
+//
+// ADVERTENCIA (no es asesoría legal): si en la práctica existe subordinación
+// real con este colaborador — horario fijo impuesto por el negocio,
+// exclusividad, supervisión directa, herramientas de trabajo provistas por
+// el negocio, etc. — la relación podría calificarse como laboral para
+// efectos legales sin importar cómo se le llame en el contrato o aquí en la
+// plataforma ("simulación laboral"). Verificar con un abogado laboral
+// nicaragüense ante cualquier duda — es responsabilidad del negocio cliente,
+// no de Ceiba.
+enum TipoContrato {
+  LABORAL
+  SERVICIOS_PROFESIONALES
+}
+
 // Figura fiscal con la que el negocio cliente está inscrito ante la DGI.
 // Es un dato informativo/documental — NO cambia el cálculo de IR laboral de
 // sus colaboradores: ese impuesto depende del salario de cada trabajador
@@ -95,6 +126,19 @@ model Employee {
   active       Boolean    @default(true)
   createdAt    DateTime   @default(now())
   payslips     Payslip[]
+
+  // Ver comentario de TipoContrato arriba — cambia por completo el cálculo.
+  tipoContrato TipoContrato @default(LABORAL)
+
+  // Si este colaborador acumula aguinaldo/vacaciones/indemnización dentro de
+  // Ceiba. Para SERVICIOS_PROFESIONALES este campo se ignora: NUNCA acumula,
+  // sin importar lo que tenga guardado (ver calcularPeriodo en payroll.ts).
+  // Para LABORAL, por defecto es true (es lo que corresponde por ley); se
+  // deja como una opción manual por si el negocio ya gestiona esas
+  // provisiones fuera de Ceiba y no quiere que se dupliquen aquí — apagarlo
+  // para un colaborador LABORAL no elimina su derecho de ley, solo deja de
+  // llevar la cuenta dentro de la plataforma.
+  acumulaPrestaciones Boolean @default(true)
 
   // Baja del colaborador — se llenan al usar "Dar de baja".
   terminatedAt     DateTime?

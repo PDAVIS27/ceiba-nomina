@@ -99,7 +99,12 @@ export default async function NominaPage({
               <tbody>
                 {employees.map((e) => (
                   <tr key={e.id} className="border-b border-line">
-                    <td className="py-2.5">{e.fullName}</td>
+                    <td className="py-2.5">
+                      {e.fullName}
+                      {e.tipoContrato === "SERVICIOS_PROFESIONALES" && (
+                        <span className="text-gold text-[10px] font-mono ml-1.5">SERV. PROF.</span>
+                      )}
+                    </td>
                     <td className="py-2.5 text-right">
                       <input name={`horas_${e.id}`} type="number" min="0" step="0.5" defaultValue="0"
                         className="w-24 bg-[#12181a] border border-linestrong rounded-lg px-2.5 py-1.5 text-sm text-right" />

@@ -17,6 +17,9 @@ export interface FilaPDF {
   inss: number;
   ir: number;
   neto: number;
+  // true si este colaborador es de servicios profesionales (retención fija
+  // del 10%, sin INSS) en vez del cálculo laboral de siempre.
+  esServiciosProfesionales?: boolean;
 }
 
 export interface DatosPreplanillaPDF {
@@ -53,6 +56,7 @@ export async function generarPDFComprobanteIndividual(datos: {
   inss: number;
   ir: number;
   neto: number;
+  esServiciosProfesionales?: boolean;
 }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -111,8 +115,12 @@ export async function generarPDFComprobanteIndividual(datos: {
   linea();
   texto("RETENCIONES", margin, y, { size: 7.5, bold: true, color: GOLD });
   y -= 14;
-  fila("INSS laboral", "- " + money(datos.inss));
-  fila("IR retenido", "- " + money(datos.ir));
+  if (datos.esServiciosProfesionales) {
+    fila("Retención servicios profesionales (10%)", "- " + money(datos.ir));
+  } else {
+    fila("INSS laboral", "- " + money(datos.inss));
+    fila("IR retenido", "- " + money(datos.ir));
+  }
   if ((datos.otrasDeducciones ?? 0) > 0) {
     fila(datos.otrasDeduccionesConcepto || "Otras deducciones", "- " + money(datos.otrasDeducciones!));
   }
@@ -490,8 +498,12 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
       if (f.comisiones > 0) conceptos.push({ nombre: "Comisiones", asignacion: f.comisiones });
       if (f.retroactivos > 0) conceptos.push({ nombre: "Retroactivos", asignacion: f.retroactivos });
       if (f.viaticos > 0) conceptos.push({ nombre: "Viáticos", asignacion: f.viaticos });
-      conceptos.push({ nombre: "INSS laboral", cantidad: "7%", deduccion: f.inss });
-      conceptos.push({ nombre: "IR retenido", deduccion: f.ir });
+      if (f.esServiciosProfesionales) {
+        conceptos.push({ nombre: "Retención servicios profesionales", cantidad: "10%", deduccion: f.ir });
+      } else {
+        conceptos.push({ nombre: "INSS laboral", cantidad: "7%", deduccion: f.inss });
+        conceptos.push({ nombre: "IR retenido", deduccion: f.ir });
+      }
       if ((f.otrasDeducciones ?? 0) > 0) {
         conceptos.push({ nombre: f.otrasDeduccionesConcepto || "Otras deducciones", deduccion: f.otrasDeducciones });
       }

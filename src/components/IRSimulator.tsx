@@ -10,6 +10,8 @@ export default function IRSimulator() {
   const [viaticos, setViaticos] = useState(0);
   const [antiguedadMeses, setAntiguedadMeses] = useState(12);
   const [exentoIR, setExentoIR] = useState(false);
+  const [tipoContrato, setTipoContrato] = useState<"LABORAL" | "SERVICIOS_PROFESIONALES">("LABORAL");
+  const [acumulaPrestaciones, setAcumulaPrestaciones] = useState(true);
 
   const d = calcularPeriodo({
     bruto: salario || 0,
@@ -19,6 +21,8 @@ export default function IRSimulator() {
     viaticos: viaticos || 0,
     antiguedadMeses: antiguedadMeses || 0,
     exentoIR,
+    tipoContrato,
+    acumulaPrestaciones,
   });
 
   return (
@@ -31,10 +35,32 @@ export default function IRSimulator() {
         <NumField label="Viáticos (C$)" value={viaticos} onChange={setViaticos} />
         <NumField label="Antigüedad (meses)" value={antiguedadMeses} onChange={setAntiguedadMeses} />
       </div>
-      <label className="flex items-center gap-2 text-xs text-inkdim mb-5">
-        <input type="checkbox" checked={exentoIR} onChange={(e) => setExentoIR(e.target.checked)} />
-        Simular negocio en régimen Cuota Fija (no se calcula IR laboral)
-      </label>
+      <div className="flex flex-wrap items-center gap-4 mb-5">
+        <div>
+          <label className="block text-xs text-inkdim mb-1.5">Tipo de contrato</label>
+          <select
+            value={tipoContrato}
+            onChange={(e) => setTipoContrato(e.target.value as "LABORAL" | "SERVICIOS_PROFESIONALES")}
+            className="bg-[#12181a] border border-linestrong rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="LABORAL">Laboral</option>
+            <option value="SERVICIOS_PROFESIONALES">Servicios profesionales</option>
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-inkdim">
+          <input type="checkbox" checked={exentoIR} onChange={(e) => setExentoIR(e.target.checked)} disabled={tipoContrato === "SERVICIOS_PROFESIONALES"} />
+          Simular negocio en régimen Cuota Fija (no se calcula IR laboral)
+        </label>
+        <label className="flex items-center gap-2 text-xs text-inkdim">
+          <input
+            type="checkbox"
+            checked={acumulaPrestaciones}
+            onChange={(e) => setAcumulaPrestaciones(e.target.checked)}
+            disabled={tipoContrato === "SERVICIOS_PROFESIONALES"}
+          />
+          Acumula prestaciones (aguinaldo/vacaciones/antigüedad)
+        </label>
+      </div>
       <table className="w-full text-sm">
         <tbody>
           <Row label="Salario bruto" value={money(d.bruto)} />
@@ -42,20 +68,35 @@ export default function IRSimulator() {
           <Row label="Comisiones" value={money(d.comisiones)} />
           <Row label="Retroactivos" value={money(d.retroactivos)} />
           <Row label="Total gravable" value={money(d.totalGravable)} />
-          <Row label="INSS laboral (7%)" value={"− " + money(d.inssLaboral)} />
-          <Row label="Base imponible mensual" value={money(d.baseImponibleMensual)} />
-          <Row label="Expectativa de renta anual (× 12)" value={money(d.expectativaAnual)} />
-          <Row label="Tramo aplicable (Art. 23, Ley 822)" value={`hasta ${d.tramo.hasta === Infinity ? "∞" : money(d.tramo.hasta)}, ${(d.tramo.tasa * 100).toFixed(0)}%`} />
-          <Row label={exentoIR ? "IR mensual a retener (exento — Cuota Fija)" : "IR mensual a retener"} value={"− " + money(d.irMensual)} />
+          {d.esServiciosProfesionales ? (
+            <>
+              <Row label="INSS laboral" value="No aplica — sin relación de subordinación" />
+              <Row label="Retención servicios profesionales (10% fijo)" value={"− " + money(d.irMensual)} />
+            </>
+          ) : (
+            <>
+              <Row label="INSS laboral (7%)" value={"− " + money(d.inssLaboral)} />
+              <Row label="Base imponible mensual" value={money(d.baseImponibleMensual)} />
+              <Row label="Expectativa de renta anual (× 12)" value={money(d.expectativaAnual)} />
+              <Row label="Tramo aplicable (Art. 23, Ley 822)" value={`hasta ${d.tramo.hasta === Infinity ? "∞" : money(d.tramo.hasta)}, ${(d.tramo.tasa * 100).toFixed(0)}%`} />
+              <Row label={exentoIR ? "IR mensual a retener (exento — Cuota Fija)" : "IR mensual a retener"} value={"− " + money(d.irMensual)} />
+            </>
+          )}
           <Row label="Viáticos (no gravable)" value={"+ " + money(d.viaticos)} />
           <tr className="border-t border-linestrong">
             <td className="py-2 font-semibold">Neto a pagar</td>
             <td className="py-2 text-right font-semibold font-mono">{money(d.netoPagar)}</td>
           </tr>
           <tr><td colSpan={2} className="pt-4 pb-1 text-xs text-inkfaint uppercase font-mono">Provisiones laborales del mes (Código del Trabajo)</td></tr>
-          <Row label="Aguinaldo (Art. 93-99 CT, exenta)" value={money(d.provisionAguinaldo)} />
-          <Row label="Vacaciones (Art. 76-82 CT, sí paga INSS/IR al disfrutarse)" value={money(d.provisionVacaciones)} />
-          <Row label="Indemnización por antigüedad (Art. 45 CT, exenta)" value={money(d.provisionIndemnizacion)} />
+          {!acumulaPrestaciones || d.esServiciosProfesionales ? (
+            <tr><td colSpan={2} className="py-2 text-xs text-inkfaint">No acumula — {d.esServiciosProfesionales ? "servicios profesionales" : "acumulación apagada"}.</td></tr>
+          ) : (
+            <>
+              <Row label="Aguinaldo (Art. 93-99 CT, exenta)" value={money(d.provisionAguinaldo)} />
+              <Row label="Vacaciones (Art. 76-82 CT, sí paga INSS/IR al disfrutarse)" value={money(d.provisionVacaciones)} />
+              <Row label="Indemnización por antigüedad (Art. 45 CT, exenta)" value={money(d.provisionIndemnizacion)} />
+            </>
+          )}
         </tbody>
       </table>
     </div>

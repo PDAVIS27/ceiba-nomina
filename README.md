@@ -103,6 +103,13 @@ En el panel del proyecto, ve a **Settings → Environment Variables** y agrega:
 | `NEXTAUTH_SECRET` | Un texto largo y aleatorio. Genera uno gratis en [generate-secret.vercel.app/32](https://generate-secret.vercel.app/32) y pégalo aquí. |
 | `NEXTAUTH_URL` | La URL de tu sitio. Vercel te la muestra al desplegar, algo como `https://ceiba-nomina.vercel.app` — si todavía no la sabes, pon cualquier valor ahora y **corrígelo después del primer despliegue**. |
 
+Opcionales, solo si quieres usar "Enviar por correo" (ver más abajo):
+
+| Variable | Valor |
+|---|---|
+| `RESEND_API_KEY` | Tu clave de API de [resend.com](https://resend.com) (cuenta gratis, hasta 3,000 correos/mes). Sin esto, el botón de enviar por correo muestra un aviso claro en vez de fallar. |
+| `RESEND_FROM_EMAIL` | Déjalo en `Ceiba <onboarding@resend.dev>` mientras no verifiques tu propio dominio en Resend — con eso solo puedes enviar a la casilla con la que creaste la cuenta de Resend. Una vez verifiques un dominio tuyo ahí (Domains → Add Domain, 10-15 min), cámbialo por algo como `Ceiba <nomina@tudominio.com>` para poder enviarle a cualquier cliente. |
+
 ---
 
 ## Paso 5 — Despliega
@@ -165,6 +172,72 @@ por encima del umbral exento (~C$8,333 mensuales), para no exponerte si la
 regla real fuera distinta. Si luego quieres que esto varíe por negocio
 puntual (algunos Cuota Fija sí, otros no), dime y lo separo del régimen en un
 interruptor aparte.
+
+---
+
+## Tipo de contrato: Laboral vs. Servicios profesionales
+
+Cada colaborador tiene un **tipo de contrato**, elegible al agregarlo y
+editable después desde su página de detalle ("Tipo de contrato"):
+
+- **Laboral** (el de siempre): relación de trabajo subordinada — INSS laboral
+  7%, tabla progresiva de IR (Art. 23, Ley 822), y acumula aguinaldo,
+  vacaciones e indemnización por antigüedad.
+- **Servicios profesionales**: contrato civil/mercantil de prestación de
+  servicios, sin relación de subordinación. No calcula INSS (ni laboral ni
+  patronal) ni la tabla progresiva de IR — en su lugar retiene un **10% fijo**
+  sobre todo lo pagado, que es la alícuota de retención en la fuente para
+  servicios profesionales de una persona natural residente (Art. 44, numeral
+  2.5, inciso a, del Reglamento de la Ley 822). Tampoco acumula aguinaldo,
+  vacaciones ni indemnización — son derechos del Código del Trabajo que no
+  corresponden a quien presta un servicio de forma independiente. Esto se
+  refleja en preplanilla/planilla, el Inicio (el INSS patronal e INATEC ya no
+  cuentan el salario de estos colaboradores en su base), el simulador de IR,
+  los PDF (comprobante, preplanilla, planilla) y la liquidación si se le da de
+  baja.
+
+**Advertencia (no es asesoría legal):** si en la práctica hay subordinación
+real con un colaborador marcado como servicios profesionales — horario fijo
+impuesto por el negocio, exclusividad, supervisión directa, herramientas de
+trabajo que tú le das, etc. — la relación podría calificar como laboral para
+efectos legales sin importar cómo se le llame aquí ("simulación laboral").
+Verifícalo con un abogado laboral nicaragüense ante cualquier duda; también te
+recomiendo confirmar con un contador la tasa del 10% antes de usarla con
+clientes reales — las fuentes que revisé coinciden en ese porcentaje para una
+persona natural residente, pero no reemplazan una revisión profesional.
+
+## Acumular o no prestaciones (aguinaldo / vacaciones / antigüedad)
+
+Además del tipo de contrato, cada colaborador **Laboral** tiene una casilla
+"Acumula aguinaldo / vacaciones / antigüedad" (activada por defecto, que es
+lo que corresponde por ley). Si la apagas para alguien, Ceiba deja de llevar
+la cuenta de esas tres provisiones para esa persona — en planilla, en su
+saldo acumulado y en su liquidación si se le da de baja. **Apagarla no quita
+el derecho de ley del colaborador** — Nicaragua no permite renunciar a eso por
+contrato en una relación laboral real — solo deja de calcularlo dentro de la
+plataforma, por ejemplo si el negocio ya las gestiona aparte y no quiere que
+se dupliquen aquí. Para colaboradores de **servicios profesionales** esta
+casilla no aplica: nunca acumulan, sin importar su valor guardado.
+
+La carga masiva por Excel no trae estas dos opciones todavía (siempre crea
+colaboradores nuevos como Laboral, acumulando) — para un colaborador que ya
+exista, respeta lo que tenga configurado. Si quieres que la plantilla de
+Excel también traiga el tipo de contrato, dime y se lo agrego.
+
+---
+
+## Enviar por correo (pre-nómina / nómina / listado de pago)
+
+Desde **Históricos**, dentro de cada período hay un desplegable "Enviar por
+correo": escribes el correo del destinatario, eliges el documento
+(preplanilla/planilla, o listado de pago si ya está aprobada) y, si quieres,
+un mensaje — se manda como adjunto en PDF, el mismo que descargas con los
+botones de arriba. Usa [Resend](https://resend.com) por debajo (ver las
+variables `RESEND_API_KEY` y `RESEND_FROM_EMAIL` en el Paso 4); mientras no
+las configures, el botón te avisa con un mensaje claro en vez de fallar en
+silencio, y mientras no verifiques tu propio dominio en Resend, solo puedes
+enviar a la casilla con la que creaste tu cuenta de Resend — verifica un
+dominio tuyo ahí para poder enviarle a cualquier cliente.
 
 ---
 
