@@ -258,32 +258,46 @@ silencio, y mientras no verifiques tu propio dominio en Resend, solo puedes
 enviar a la casilla con la que creaste tu cuenta de Resend — verifica un
 dominio tuyo ahí para poder enviarle a cualquier cliente.
 
-### Que el cliente apruebe desde ese mismo correo
+### Que el cliente apruebe desde un enlace — por correo o copiándolo tú mismo
 
-Cuando el documento que envías es la **preplanilla de un período BORRADOR**,
-el correo trae además un enlace de aprobación — el cliente le da clic, ve un
-resumen (negocio, período, colaboradores, total neto) y un botón **"Aprobar
-prenómina"**, todo sin tener que crear cuenta ni iniciar sesión en Ceiba. En
-cuanto el cliente aprueba, lo vas a ver en dos lugares: el aviso de borrador
-pendiente en el **Inicio**, y el detalle del período en **Históricos**
-(ambos muestran "✓ el cliente aprobó por correo" junto al correo que lo
-aprobó).
+Hay dos formas de que el cliente llegue al mismo enlace de aprobación, para
+un período BORRADOR:
 
-**A propósito, esa aprobación por correo NO cambia nada en el sistema por sí
-sola** — el período sigue en BORRADOR hasta que tú (o quien tenga acceso a
-esa cuenta) le das clic al botón de siempre, "Marcar como aprobada", dentro
-de Históricos. Lo hice así para que nadie que solo tenga el enlace del
-correo —y no una cuenta de Ceiba— pueda aprobar una planilla directamente en
-el sistema; el enlace solo deja constancia de que el cliente ya dio su visto
-bueno, para que la aprobación final la sigas dando tú con el mismo criterio
-de siempre.
+- **Por correo**, automático: cuando envías la preplanilla por correo desde
+  "Enviar por correo" (ver arriba), el correo trae el enlace incluido.
+- **Sin correo**, a mano: en el detalle del período en Históricos hay una
+  sección aparte, **"Enlace de aprobación (sin correo)"**, con un botón
+  **"Generar enlace de aprobación"**. Al darle clic, Ceiba genera el enlace y
+  te lo muestra con un botón **"Copiar enlace"** — lo pegas tú mismo donde
+  quieras (WhatsApp, SMS, tu correo personal) sin que Ceiba tenga que enviar
+  nada ni que configures Resend. Esta es la opción si no quieres (o no
+  puedes todavía) configurar un proveedor de correo.
 
-El enlace es el mismo cada vez que reenvíes el correo de esa preplanilla (no
-se invalida ni cambia), y sigue funcionando aunque el cliente ya haya hecho
-clic antes — en ese caso solo le muestra que ya aprobó y la fecha. Si el
-período ya quedó aprobado dentro del sistema, el enlace lo avisa y no ofrece
-nada más que hacer. Necesita la misma variable `NEXTAUTH_URL` del Paso 4 (la
-URL pública de tu sitio) para armar el enlace correctamente.
+En cualquiera de los dos casos, el cliente llega a la misma página pública:
+ve un resumen (negocio, período, colaboradores, total neto), puede
+**descargar el PDF con el detalle completo** ahí mismo, y tiene un botón
+**"Aprobar prenómina"** — todo sin crear cuenta ni iniciar sesión en Ceiba.
+En cuanto el cliente aprueba, lo vas a ver en dos lugares: el aviso de
+borrador pendiente en el **Inicio**, y el detalle del período en
+**Históricos** (ambos muestran "✓ el cliente aprobó desde el enlace").
+
+**A propósito, esa aprobación desde el enlace NO cambia nada en el sistema
+por sí sola** — el período sigue en BORRADOR hasta que tú (o quien tenga
+acceso a esa cuenta) le das clic al botón de siempre, "Marcar como
+aprobada", dentro de Históricos. Lo hice así para que nadie que solo tenga
+el enlace —y no una cuenta de Ceiba— pueda aprobar una planilla directamente
+en el sistema; el enlace solo deja constancia de que el cliente ya dio su
+visto bueno, para que la aprobación final la sigas dando tú con el mismo
+criterio de siempre.
+
+El enlace es siempre el mismo para ese período (no se invalida ni cambia,
+sin importar si lo generaste a mano o si salió de un correo), y sigue
+funcionando aunque el cliente ya haya hecho clic antes — en ese caso solo le
+muestra que ya aprobó y la fecha. Si el período ya quedó aprobado dentro del
+sistema, el enlace lo avisa y no ofrece nada más que hacer. Necesita la
+misma variable `NEXTAUTH_URL` del Paso 4 (la URL pública de tu sitio) para
+armar el enlace correctamente — eso sí lo necesitas tener configurado,
+aunque no uses Resend para nada.
 
 ---
 

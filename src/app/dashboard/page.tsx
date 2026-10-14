@@ -73,7 +73,7 @@ export default async function InicioPage() {
           <div className="text-sm">
             Tienes un borrador pendiente de aprobación: <strong>{ultimoBorrador.label}</strong>
             {ultimoBorrador.clientApprovedAt && (
-              <span className="text-emerald"> · ✓ el cliente ya aprobó por correo</span>
+              <span className="text-emerald"> · ✓ el cliente ya aprobó desde el enlace</span>
             )}
           </div>
           <Link

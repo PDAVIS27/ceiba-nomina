@@ -2,7 +2,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SubmitButton from "@/components/SubmitButton";
-import { aprobarPlanilla, eliminarBorrador, enviarPlanillaPorCorreo } from "@/app/dashboard/actions";
+import CopyLinkButton from "@/components/CopyLinkButton";
+import {
+  aprobarPlanilla,
+  eliminarBorrador,
+  enviarPlanillaPorCorreo,
+  generarEnlaceAprobacion,
+} from "@/app/dashboard/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -211,8 +217,8 @@ export default async function HistoricosPage({
                     {" "}
                     ·{" "}
                     <span className="text-emerald">
-                      ✓ el cliente aprobó por correo
-                      {selectedPeriod.clientApprovalEmail ? ` (${selectedPeriod.clientApprovalEmail})` : ""}
+                      ✓ el cliente aprobó desde el enlace
+                      {selectedPeriod.clientApprovalEmail ? ` (enviado a ${selectedPeriod.clientApprovalEmail})` : ""}
                     </span>
                   </>
                 )}
@@ -252,6 +258,48 @@ export default async function HistoricosPage({
                 )}
               </div>
             </div>
+
+            {selectedPeriod.status === "BORRADOR" && (
+              <details className="border border-line rounded-lg px-4 py-3 mb-5 group" open={!selectedPeriod.clientApprovalToken}>
+                <summary className="cursor-pointer text-sm text-inkdim hover:text-gold transition list-none flex items-center gap-2">
+                  <span className="text-inkfaint text-xs group-open:rotate-90 transition-transform">▸</span>
+                  Enlace de aprobación (sin correo)
+                </summary>
+                <div className="mt-4">
+                  {selectedPeriod.clientApprovalToken ? (
+                    <>
+                      <p className="text-inkfaint text-xs mb-2">
+                        Copia este enlace y mándalo tú mismo por donde quieras — WhatsApp, SMS, tu correo personal —
+                        sin que Ceiba tenga que enviar nada. El cliente ve un resumen, puede descargar el PDF y
+                        aprobar sin iniciar sesión.
+                      </p>
+                      <div className="flex flex-wrap gap-2 items-stretch">
+                        <input
+                          readOnly
+                          value={enlaceAprobacionDe(selectedPeriod.clientApprovalToken)}
+                          onFocus={(e) => e.currentTarget.select()}
+                          className="flex-1 min-w-[260px] bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-xs font-mono text-inkdim"
+                        />
+                        <CopyLinkButton
+                          text={enlaceAprobacionDe(selectedPeriod.clientApprovalToken)}
+                          className="px-4 py-2.5 rounded-lg bg-gold text-[#1b1500] text-sm font-medium whitespace-nowrap"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <form action={generarEnlaceAprobacion}>
+                      <input type="hidden" name="periodId" value={selectedPeriod.id} />
+                      <SubmitButton
+                        className="px-4 py-2.5 rounded-lg bg-gold text-[#1b1500] text-sm font-medium"
+                        pendingText="Generando…"
+                      >
+                        Generar enlace de aprobación
+                      </SubmitButton>
+                    </form>
+                  )}
+                </div>
+              </details>
+            )}
 
             <details className="border border-line rounded-lg px-4 py-3 mb-5 group">
               <summary className="cursor-pointer text-sm text-inkdim hover:text-gold transition list-none flex items-center gap-2">
@@ -379,4 +427,11 @@ function Detalle({ label, value, bold }: { label: string; value: string; bold?: 
 
 function money(n: number) {
   return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Mismo criterio que obtenerOCrearEnlaceAprobacion() en actions.ts — arma la
+// URL pública a partir del token ya guardado, para mostrarla/copiarla aquí.
+function enlaceAprobacionDe(token: string): string {
+  const base = (process.env.NEXTAUTH_URL || "").replace(/\/+$/, "");
+  return `${base}/aprobar/${token}`;
 }

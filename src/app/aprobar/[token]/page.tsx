@@ -6,10 +6,12 @@ import CeibaLogo from "@/components/CeibaLogo";
 export const dynamic = "force-dynamic";
 
 // ---------------------------------------------------------------------------
-// Página PÚBLICA (sin login) a la que llega el cliente desde el enlace que
-// se le manda por correo junto con la preplanilla — ver enviarPlanillaPorCorreo()
-// en src/app/dashboard/actions.ts. No está bajo /dashboard ni /admin, así que
-// el middleware (src/middleware.ts) no le exige sesión.
+// Página PÚBLICA (sin login) a la que llega el cliente desde el enlace de
+// aprobación — ya sea porque se lo mandaron por correo junto con la
+// preplanilla (enviarPlanillaPorCorreo) o porque el negocio lo copió y lo
+// compartió a mano por WhatsApp/SMS/lo que sea (generarEnlaceAprobacion),
+// ambas en src/app/dashboard/actions.ts. No está bajo /dashboard ni /admin,
+// así que el middleware (src/middleware.ts) no le exige sesión.
 //
 // A propósito, el clic de "Aprobar" aquí NO cambia el status de la planilla
 // en el sistema (sigue BORRADOR) — solo deja constancia (clientApprovedAt)
@@ -65,13 +67,20 @@ export default async function AprobarPorCorreoPage({ params }: { params: { token
               </div>
             </div>
 
-            <div className="bg-[#12181a] border border-line rounded-xl p-4 mb-6 text-sm space-y-2">
+            <div className="bg-[#12181a] border border-line rounded-xl p-4 mb-5 text-sm space-y-2">
               <Row label="Colaboradores" value={String(period.payslips.length)} />
               <Row
                 label="Total neto a pagar"
                 value={money(period.payslips.reduce((a, ps) => a + Number(ps.netPay), 0))}
               />
             </div>
+
+            <a
+              href={`/api/aprobar/${params.token}/pdf`}
+              className="block text-center w-full border border-linestrong rounded-lg py-2.5 mb-6 text-sm text-inkdim hover:border-gold hover:text-gold transition"
+            >
+              Descargar PDF con el detalle completo
+            </a>
 
             {period.status === "APROBADA" ? (
               <p className="text-emerald text-sm text-center">
@@ -85,8 +94,8 @@ export default async function AprobarPorCorreoPage({ params }: { params: { token
             ) : (
               <>
                 <p className="text-inkdim text-sm text-center mb-5">
-                  Revisa el PDF adjunto en el correo. Si todo está correcto, confirma tu aprobación con el botón de
-                  abajo — el negocio verá que aprobaste y hará la aprobación final en su sistema.
+                  Revisa el PDF con el detalle completo arriba. Si todo está correcto, confirma tu aprobación con el
+                  botón de abajo — el negocio verá que aprobaste y hará la aprobación final en su sistema.
                 </p>
                 <form action={aprobarPorCorreo}>
                   <input type="hidden" name="token" value={params.token} />

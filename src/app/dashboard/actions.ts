@@ -30,6 +30,29 @@ async function requireCompanyId(): Promise<string> {
   return companyId as string;
 }
 
+// Enlace público de aprobación por correo/WhatsApp/lo que sea — ver el
+// comentario grande en schema.prisma. Se usa tanto al enviar la preplanilla
+// por correo (enviarPlanillaPorCorreo) como al generar el enlace para
+// compartir a mano (generarEnlaceAprobacion). El token se genera una sola
+// vez por período y se reutiliza siempre — así cualquier copia del enlace
+// que ya hayas compartido sigue sirviendo.
+async function obtenerOCrearEnlaceAprobacion(
+  periodId: string,
+  existingToken: string | null,
+  destinatarioEmail?: string
+): Promise<string> {
+  const token = existingToken || crypto.randomBytes(24).toString("base64url");
+  await prisma.payrollPeriod.update({
+    where: { id: periodId },
+    data: {
+      clientApprovalToken: token,
+      ...(destinatarioEmail ? { clientApprovalEmail: destinatarioEmail } : {}),
+    },
+  });
+  const base = (process.env.NEXTAUTH_URL || "").replace(/\/+$/, "");
+  return `${base}/aprobar/${token}`;
+}
+
 export async function addEmployee(formData: FormData) {
   const companyId = await requireCompanyId();
   const fullName = String(formData.get("fullName") || "").trim();
@@ -743,13 +766,7 @@ export async function enviarPlanillaPorCorreo(formData: FormData) {
   // solo dentro del sistema.
   let enlaceAprobacion: string | null = null;
   if (documento === "preplanilla" && period!.status === "BORRADOR") {
-    const token = period!.clientApprovalToken || crypto.randomBytes(24).toString("base64url");
-    await prisma.payrollPeriod.update({
-      where: { id: period!.id },
-      data: { clientApprovalToken: token, clientApprovalEmail: destinatario },
-    });
-    const base = (process.env.NEXTAUTH_URL || "").replace(/\/+$/, "");
-    enlaceAprobacion = `${base}/aprobar/${token}`;
+    enlaceAprobacion = await obtenerOCrearEnlaceAprobacion(period!.id, period!.clientApprovalToken, destinatario);
   }
 
   const asunto = `${period!.company.name} — ${etiquetaDocumento}: ${period!.label}`;
@@ -776,4 +793,30 @@ export async function enviarPlanillaPorCorreo(formData: FormData) {
   }
 
   redirect(`/dashboard/historicos?periodo=${periodId}&correoOk=${encodeURIComponent(destinatario)}`);
+}
+
+/**
+ * Genera (o reutiliza) el enlace de aprobación de una preplanilla SIN
+ * enviar ningún correo — para que lo copies y lo mandes tú mismo por donde
+ * quieras (WhatsApp, SMS, tu propio correo). No depende de Resend ni de
+ * ninguna variable de entorno de correo.
+ */
+export async function generarEnlaceAprobacion(formData: FormData) {
+  const companyId = await requireCompanyId();
+  const periodId = String(formData.get("periodId") || "");
+
+  const period = await prisma.payrollPeriod.findUnique({ where: { id: periodId } });
+  if (!period || period.companyId !== companyId) {
+    redirect(`/dashboard/historicos?correoError=${encodeURIComponent("No encontré ese período.")}`);
+  }
+  if (period!.status !== "BORRADOR") {
+    redirect(
+      `/dashboard/historicos?periodo=${periodId}&correoError=${encodeURIComponent(
+        "El enlace de aprobación solo aplica a una preplanilla pendiente (BORRADOR)."
+      )}`
+    );
+  }
+
+  await obtenerOCrearEnlaceAprobacion(period!.id, period!.clientApprovalToken);
+  redirect(`/dashboard/historicos?periodo=${periodId}&enlaceGenerado=1`);
 }
