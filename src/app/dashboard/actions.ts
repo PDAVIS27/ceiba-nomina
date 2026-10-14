@@ -15,6 +15,7 @@ import {
 import { generarPDFPreplanilla, generarPDFListadoPago } from "@/lib/pdfPreplanilla";
 import { enviarPDFPorCorreo } from "@/lib/email";
 import { redirect } from "next/navigation";
+import crypto from "crypto";
 
 import { mesesEntre } from "@/lib/dateUtils";
 
@@ -733,10 +734,32 @@ export async function enviarPlanillaPorCorreo(formData: FormData) {
     etiquetaDocumento = period!.status === "BORRADOR" ? "preplanilla" : "planilla";
   }
 
+  // Enlace de aprobación por correo — solo tiene sentido para una preplanilla
+  // (status BORRADOR) todavía pendiente de aprobar; un listado de pago o una
+  // planilla ya aprobada no necesitan que nadie apruebe nada. El token se
+  // genera una sola vez y se reutiliza en envíos siguientes, así el mismo
+  // enlace sigue sirviendo si reenvías el correo más adelante. Ver el
+  // comentario en schema.prisma sobre por qué esto NO aprueba nada por sí
+  // solo dentro del sistema.
+  let enlaceAprobacion: string | null = null;
+  if (documento === "preplanilla" && period!.status === "BORRADOR") {
+    const token = period!.clientApprovalToken || crypto.randomBytes(24).toString("base64url");
+    await prisma.payrollPeriod.update({
+      where: { id: period!.id },
+      data: { clientApprovalToken: token, clientApprovalEmail: destinatario },
+    });
+    const base = (process.env.NEXTAUTH_URL || "").replace(/\/+$/, "");
+    enlaceAprobacion = `${base}/aprobar/${token}`;
+  }
+
   const asunto = `${period!.company.name} — ${etiquetaDocumento}: ${period!.label}`;
   const mensaje =
     (mensajePersonal ? mensajePersonal + "\n\n" : "") +
-    `Adjunto el PDF de ${etiquetaDocumento} del período "${period!.label}" de ${period!.company.name}.\n\n— Enviado desde Ceiba`;
+    `Adjunto el PDF de ${etiquetaDocumento} del período "${period!.label}" de ${period!.company.name}.` +
+    (enlaceAprobacion
+      ? `\n\nPara aprobar esta prenómina, entra a este enlace:\n${enlaceAprobacion}`
+      : "") +
+    `\n\n— Enviado desde Ceiba`;
 
   const resultado = await enviarPDFPorCorreo({
     destinatario,

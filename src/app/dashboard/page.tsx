@@ -72,6 +72,9 @@ export default async function InicioPage() {
         <div className="bg-gold/10 border border-gold rounded-xl p-4 mb-8 flex justify-between items-center flex-wrap gap-3">
           <div className="text-sm">
             Tienes un borrador pendiente de aprobación: <strong>{ultimoBorrador.label}</strong>
+            {ultimoBorrador.clientApprovedAt && (
+              <span className="text-emerald"> · ✓ el cliente ya aprobó por correo</span>
+            )}
           </div>
           <Link
             href={`/dashboard/historicos?periodo=${ultimoBorrador.id}`}

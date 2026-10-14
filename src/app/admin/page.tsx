@@ -12,6 +12,20 @@ import AutoSubmitSelect from "@/components/AutoSubmitSelect";
 
 export const dynamic = "force-dynamic";
 
+// Etapa del negocio ante TI como proveedor — no afecta ningún cálculo de
+// nómina, es solo para que puedas dar seguimiento comercial a tus clientes.
+// Todo negocio nuevo arranca en PILOTO (ver default en schema.prisma); antes
+// de este cambio no había forma de cambiarlo desde el panel.
+const ESTADOS_NEGOCIO = [
+  { value: "PILOTO", label: "Piloto", className: "text-gold" },
+  { value: "ACTIVO", label: "Activo", className: "text-emerald" },
+  { value: "PAUSADO", label: "Pausado", className: "text-lava" },
+] as const;
+
+function claseEstado(status: string): string {
+  return ESTADOS_NEGOCIO.find((e) => e.value === status)?.className ?? "text-inkfaint";
+}
+
 async function createCompany(formData: FormData) {
   "use server";
   const name = String(formData.get("name") || "").trim();
@@ -45,6 +59,15 @@ async function actualizarRegimen(formData: FormData) {
   const regimenFiscal = REGIMENES_FISCALES.some((r) => r.value === regimenRaw) ? regimenRaw : "GENERAL";
   if (!companyId) return;
   await prisma.company.update({ where: { id: companyId }, data: { regimenFiscal: regimenFiscal as any } });
+}
+
+async function actualizarStatus(formData: FormData) {
+  "use server";
+  const companyId = String(formData.get("companyId") || "");
+  const statusRaw = String(formData.get("status") || "PILOTO");
+  const status = ESTADOS_NEGOCIO.some((e) => e.value === statusRaw) ? statusRaw : "PILOTO";
+  if (!companyId) return;
+  await prisma.company.update({ where: { id: companyId }, data: { status } });
 }
 
 async function toggleCase(formData: FormData) {
@@ -187,7 +210,18 @@ export default async function AdminPage({
                     />
                   </form>
                 </td>
-                <td className="py-3 text-xs font-mono text-emerald">{c.status}</td>
+                <td className="py-3">
+                  <form action={actualizarStatus} className="flex items-center gap-1.5">
+                    <input type="hidden" name="companyId" value={c.id} />
+                    <AutoSubmitSelect
+                      name="status"
+                      defaultValue={c.status}
+                      options={ESTADOS_NEGOCIO.map((e) => ({ value: e.value, label: e.label }))}
+                      className={`bg-[#12181a] border border-linestrong rounded-lg px-2 py-1 text-xs font-mono ${claseEstado(c.status)}`}
+                      title="Solo para tu seguimiento comercial — no afecta ningún cálculo de nómina"
+                    />
+                  </form>
+                </td>
               </tr>
             ))}
             {companies.length === 0 && (

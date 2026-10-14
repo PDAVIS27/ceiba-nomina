@@ -167,6 +167,23 @@ model PayrollPeriod {
   // provisiones cae de vuelta a createdAt para esos casos (ver provisiones.ts).
   periodStart DateTime?
   periodEnd   DateTime?
+
+  // Aprobación del CLIENTE por correo (ver enviarPlanillaPorCorreo() en
+  // actions.ts y la página pública /aprobar/[token]) — un enlace de un solo
+  // uso lógico que el cliente puede abrir SIN iniciar sesión en Ceiba para
+  // dar su visto bueno a la prenómina. clientApprovalToken se genera la
+  // primera vez que se envía la preplanilla por correo (y se reutiliza en
+  // envíos siguientes, así el mismo enlace sigue sirviendo); clientApprovedAt
+  // se llena cuando el cliente le da clic a "Aprobar" en esa página.
+  //
+  // IMPORTANTE: esto NO cambia `status` por sí solo. Es solo una constancia
+  // visible para quien tenga acceso a la cuenta (ver Históricos e Inicio) —
+  // la aprobación real adentro del sistema sigue siendo el botón "Marcar
+  // como aprobada", a propósito, para que nadie con solo el enlace del
+  // correo pueda aprobar planillas directamente en el sistema.
+  clientApprovalToken String?   @unique
+  clientApprovalEmail String?
+  clientApprovedAt    DateTime?
 }
 
 model Payslip {

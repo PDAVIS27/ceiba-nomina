@@ -206,6 +206,16 @@ export default async function HistoricosPage({
                 <span className={selectedPeriod.status === "BORRADOR" ? "text-gold" : "text-emerald"}>
                   {selectedPeriod.status === "BORRADOR" ? "BORRADOR — pendiente de aprobación" : "APROBADA"}
                 </span>
+                {selectedPeriod.status === "BORRADOR" && selectedPeriod.clientApprovedAt && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <span className="text-emerald">
+                      ✓ el cliente aprobó por correo
+                      {selectedPeriod.clientApprovalEmail ? ` (${selectedPeriod.clientApprovalEmail})` : ""}
+                    </span>
+                  </>
+                )}
               </div>
               <div className="flex gap-2">
                 <a
@@ -278,8 +288,11 @@ export default async function HistoricosPage({
                 </SubmitButton>
               </form>
               <p className="text-inkfaint text-xs mt-3">
-                Se manda como adjunto en PDF, igual al que descargas arriba. Requiere tener configurada la variable
-                RESEND_API_KEY en Vercel — si no, te avisa aquí en vez de fallar en silencio.
+                Se manda como adjunto en PDF, igual al que descargas arriba. Si el documento es la preplanilla de un
+                período BORRADOR, el correo también incluye un enlace para que el cliente apruebe sin tener que
+                entrar a Ceiba — cuando lo haga, lo verás aquí arriba. Esa aprobación por correo es solo una
+                constancia: la aprobación final sigue siendo el botón "Marcar como aprobada". Requiere tener
+                configurada la variable RESEND_API_KEY en Vercel — si no, te avisa aquí en vez de fallar en silencio.
               </p>
             </details>
 
