@@ -183,7 +183,7 @@ export default async function AdminPage({
                       defaultValue={c.regimenFiscal}
                       options={REGIMENES_FISCALES.map((r) => ({ value: r.value, label: r.label }))}
                       className="bg-[#12181a] border border-linestrong rounded-lg px-2 py-1 text-xs"
-                      title="Cuota Fija desactiva el cálculo de IR laboral para todos sus colaboradores"
+                      title="Cuota Fija desactiva el cálculo de IR laboral y la retención de servicios profesionales para todos sus colaboradores"
                     />
                   </form>
                 </td>
@@ -221,7 +221,7 @@ export default async function AdminPage({
           </SubmitButton>
         </form>
         <div className="text-inkfaint text-xs mt-3">
-          El régimen fiscal es solo un dato del negocio — no cambia el cálculo del IR de sus colaboradores, que siempre depende del salario de cada quien (Art. 23, Ley 822).
+          Régimen General y Zona Franca son solo un dato del negocio — no cambian el cálculo del IR de sus colaboradores. <strong>Cuota Fija sí cambia el cálculo:</strong> no se retiene IR laboral a sus colaboradores Laboral ni el 10% de servicios profesionales a sus colaboradores de ese tipo (ver nota en regimenFiscal.ts / README).
         </div>
       </section>
 

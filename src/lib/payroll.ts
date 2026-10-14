@@ -253,10 +253,17 @@ export function calcularPeriodo(params: {
   otrasDeducciones?: number;
   otrasDeduccionesConcepto?: string | null;
   // Negocio en régimen Cuota Fija — ver comentario de calcularIR() arriba.
+  // También exonera la retención fija de servicios profesionales (ver más
+  // abajo) — el Art. 44 del Reglamento de la Ley 822 liga esa retención a
+  // los "contribuyentes del régimen general", y el Art. 57.5 exige que la
+  // Administración Tributaria nombre y notifique a una persona natural como
+  // agente retenedor, cosa que no aplica a un negocio en Cuota Fija.
   exentoIR?: boolean;
   // LABORAL (por defecto) o SERVICIOS_PROFESIONALES — ver TipoContrato en
-  // schema.prisma. SERVICIOS_PROFESIONALES ignora exentoIR, acumulaPrestaciones
-  // y la tabla progresiva: siempre retiene el 10% fijo, sin INSS, sin provisiones.
+  // schema.prisma. SERVICIOS_PROFESIONALES ignora acumulaPrestaciones y la
+  // tabla progresiva: retiene el 10% fijo sobre todo lo pagado, sin INSS, sin
+  // provisiones — salvo que exentoIR sea true (Cuota Fija), caso en el que no
+  // retiene nada, igual que ya ocurre con el IR laboral.
   tipoContrato?: TipoContratoKey;
   // Si acumula aguinaldo/vacaciones/indemnización este período. Por defecto
   // true para LABORAL (lo que corresponde por ley); se ignora por completo
@@ -290,11 +297,17 @@ export function calcularPeriodo(params: {
     // porcentaje fijo sobre todo lo pagado, no la tabla progresiva del
     // Art. 23 (esa tabla es solo para rentas del trabajo en relación de
     // dependencia). Ver RETENCION_SERVICIOS_PROFESIONALES arriba.
+    //
+    // Si exentoIR (Cuota Fija) está activo, tampoco se retiene esto: un
+    // negocio en Cuota Fija no es "contribuyente del régimen general" (Art.
+    // 44 Reglamento Ley 822) ni ha sido nombrado agente retenedor por la
+    // Administración Tributaria (Art. 57.5), así que no le corresponde
+    // actuar como agente de retención sobre lo que paga a terceros.
     inssLaboral = 0;
     baseImponibleMensual = totalGravable;
     expectativaAnual = 0;
-    tramo = { hasta: Infinity, base: 0, tasa: RETENCION_SERVICIOS_PROFESIONALES, exceso: 0 };
-    irMensual = round2(totalGravable * RETENCION_SERVICIOS_PROFESIONALES);
+    tramo = { hasta: Infinity, base: 0, tasa: exentoIR ? 0 : RETENCION_SERVICIOS_PROFESIONALES, exceso: 0 };
+    irMensual = exentoIR ? 0 : round2(totalGravable * RETENCION_SERVICIOS_PROFESIONALES);
     irAnual = round2(irMensual * 12);
   } else {
     inssLaboral = round2(totalGravable * INSS_LABORAL);

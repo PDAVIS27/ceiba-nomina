@@ -48,8 +48,8 @@ export default function IRSimulator() {
           </select>
         </div>
         <label className="flex items-center gap-2 text-xs text-inkdim">
-          <input type="checkbox" checked={exentoIR} onChange={(e) => setExentoIR(e.target.checked)} disabled={tipoContrato === "SERVICIOS_PROFESIONALES"} />
-          Simular negocio en régimen Cuota Fija (no se calcula IR laboral)
+          <input type="checkbox" checked={exentoIR} onChange={(e) => setExentoIR(e.target.checked)} />
+          Simular negocio en régimen Cuota Fija (no se calcula IR laboral ni retención de servicios profesionales)
         </label>
         <label className="flex items-center gap-2 text-xs text-inkdim">
           <input
@@ -71,7 +71,10 @@ export default function IRSimulator() {
           {d.esServiciosProfesionales ? (
             <>
               <Row label="INSS laboral" value="No aplica — sin relación de subordinación" />
-              <Row label="Retención servicios profesionales (10% fijo)" value={"− " + money(d.irMensual)} />
+              <Row
+                label={exentoIR ? "Retención servicios profesionales (exenta — Cuota Fija)" : "Retención servicios profesionales (10% fijo)"}
+                value={"− " + money(d.irMensual)}
+              />
             </>
           ) : (
             <>

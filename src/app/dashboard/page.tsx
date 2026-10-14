@@ -118,20 +118,13 @@ export default async function InicioPage() {
                 <div className="text-inkfaint text-[10px] font-mono uppercase tracking-wide">A la DGI</div>
               </div>
               <div className="px-5 py-4">
-                {exentoIR && !hayServiciosProfesionales ? (
+                {exentoIR ? (
                   <div className="text-sm text-inkdim">
-                    No aplica — tu negocio está registrado como <strong>Cuota Fija</strong>, así que no se calcula IR laboral a tus colaboradores.
+                    No aplica — tu negocio está registrado como <strong>Cuota Fija</strong>, así que no se calcula IR laboral ni retención de servicios profesionales a tus colaboradores.
                   </div>
                 ) : (
                   <>
-                    {exentoIR && hayServiciosProfesionales && (
-                      <div className="text-xs text-inkfaint mb-2">
-                        Cuota Fija exonera el IR laboral de tus colaboradores LABORAL, pero no la retención de servicios profesionales de abajo.
-                      </div>
-                    )}
-                    {!exentoIR && (
-                      <RowPago label="IR mensual retenido" sub="Art. 23, Ley 822 — colaboradores LABORAL" value={money(round2(rows.filter((d) => !d.esServiciosProfesionales).reduce((a, d) => a + d.irMensual, 0)))} />
-                    )}
+                    <RowPago label="IR mensual retenido" sub="Art. 23, Ley 822 — colaboradores LABORAL" value={money(round2(rows.filter((d) => !d.esServiciosProfesionales).reduce((a, d) => a + d.irMensual, 0)))} />
                     {hayServiciosProfesionales && (
                       <RowPago
                         label="Retención servicios profesionales"

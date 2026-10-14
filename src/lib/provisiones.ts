@@ -216,7 +216,10 @@ export function calcularRetencionIndependiente(
   if (tipoContrato === "SERVICIOS_PROFESIONALES") {
     // Mismo criterio que calcularPeriodo(): sin INSS, retención fija del
     // 10% en vez de la tabla progresiva (ver RETENCION_SERVICIOS_PROFESIONALES).
-    const ir = round2(bruto * RETENCION_SERVICIOS_PROFESIONALES);
+    // exentoIR (Cuota Fija) también exonera esto — ver el comentario en
+    // calcularPeriodo() sobre por qué un negocio en Cuota Fija no actúa como
+    // agente retenedor de servicios profesionales.
+    const ir = exentoIR ? 0 : round2(bruto * RETENCION_SERVICIOS_PROFESIONALES);
     return { bruto: round2(bruto), inss: 0, ir, neto: round2(bruto - ir) };
   }
   const d = calcularIR(bruto, exentoIR);

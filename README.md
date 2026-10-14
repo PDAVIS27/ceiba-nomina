@@ -151,27 +151,44 @@ Opcionales, solo si quieres usar "Enviar por correo" (ver más abajo):
 
 Al registrar un negocio (o después, desde la tabla de "Negocios" en tu panel
 de proveedor) eliges su régimen fiscal ante la DGI. Se muestra en esa tabla y
-en el Inicio del propio negocio, y **Cuota Fija sí cambia un cálculo**: para
-cualquier negocio marcado como Cuota Fija, Ceiba deja de calcular y retener
-IR laboral a todos sus colaboradores — en preplanilla/planilla (manual o por
-Excel), en el Inicio (el bloque "Lo que debes pagar") y en la liquidación al
-dar de baja a alguien. El INSS laboral (7%) se sigue calculando siempre igual
-— es un aporte a la INSS, no un impuesto de la DGI. Régimen General y Zona
-Franca no cambian ningún cálculo.
+en el Inicio del propio negocio, y **Cuota Fija sí cambia un cálculo, en dos
+frentes**: para cualquier negocio marcado como Cuota Fija, Ceiba deja de
+calcular y retener (1) IR laboral a sus colaboradores **Laboral** y (2) la
+retención de **servicios profesionales** (10%) a sus colaboradores de ese
+tipo — en preplanilla/planilla (manual o por Excel), en el Inicio (el bloque
+"Lo que debes pagar") y en la liquidación al dar de baja a alguien. El INSS
+laboral (7%) se sigue calculando siempre igual — es un aporte a la INSS, no
+un impuesto de la DGI. Régimen General y Zona Franca no cambian ningún
+cálculo.
 
-**Nota de transparencia:** las fuentes públicas que revisé (Ley 822 y su
-Reglamento, guías de firmas contables, el acuerdo ministerial de Cuota Fija)
-describen ese régimen como un sustituto del IR y el IVA **del negocio**
-(persona natural, ingresos ≤ C$100,000/mes) — el IR laboral en general se
-describe como algo que depende del salario del colaborador, no del régimen
-del empleador, y no encontré una exención explícita para ese caso. Implementé
-esto porque me confirmaste que así se maneja en la práctica con tus clientes
-Cuota Fija — vale la pena que lo confirmes una vez con tu contador o con la
-DGI, sobre todo si algún colaborador de un negocio Cuota Fija llega a ganar
-por encima del umbral exento (~C$8,333 mensuales), para no exponerte si la
-regla real fuera distinta. Si luego quieres que esto varíe por negocio
-puntual (algunos Cuota Fija sí, otros no), dime y lo separo del régimen en un
-interruptor aparte.
+**Nota de transparencia (IR laboral):** las fuentes públicas que revisé (Ley
+822 y su Reglamento, guías de firmas contables, el acuerdo ministerial de
+Cuota Fija) describen ese régimen como un sustituto del IR y el IVA **del
+negocio** (persona natural, ingresos ≤ C$100,000/mes) — el IR laboral en
+general se describe como algo que depende del salario del colaborador, no
+del régimen del empleador, y no encontré una exención explícita para ese
+caso. Implementé esto porque me confirmaste que así se maneja en la práctica
+con tus clientes Cuota Fija — vale la pena que lo confirmes una vez con tu
+contador o con la DGI, sobre todo si algún colaborador de un negocio Cuota
+Fija llega a ganar por encima del umbral exento (~C$8,333 mensuales), para no
+exponerte si la regla real fuera distinta. Si luego quieres que esto varíe
+por negocio puntual (algunos Cuota Fija sí, otros no), dime y lo separo del
+régimen en un interruptor aparte.
+
+**Nota de transparencia (retención de servicios profesionales):** me
+preguntaste si una empresa en Cuota Fija debía seguir reteniendo el 10% de
+servicios profesionales, y al investigarlo encontré una base legal más
+directa que para el IR laboral: el Art. 44 del Reglamento de la Ley 822 liga
+esa retención a los **"contribuyentes del régimen general"**, el Art. 57.5
+exige que la Administración Tributaria **nombre y notifique** a una persona
+natural como agente retenedor (no ocurre solo por operar), y Cuota Fija (Art.
+259 LCT) es en sí un régimen exclusivo de personas naturales con negocios
+pequeños, categóricamente separado del régimen general. Con eso, corregí
+Ceiba para que Cuota Fija también exonere esta retención — antes la aplicaba
+siempre, sin importar el régimen, lo cual no era correcto. No es una cita
+legal única y literal (es una conclusión que cruza esos tres artículos), así
+que sigue valiendo la pena que lo confirmes con tu contador antes de operar
+con clientes reales, igual que el resto de las tasas de esta plataforma.
 
 ---
 
@@ -188,7 +205,9 @@ editable después desde su página de detalle ("Tipo de contrato"):
   patronal) ni la tabla progresiva de IR — en su lugar retiene un **10% fijo**
   sobre todo lo pagado, que es la alícuota de retención en la fuente para
   servicios profesionales de una persona natural residente (Art. 44, numeral
-  2.5, inciso a, del Reglamento de la Ley 822). Tampoco acumula aguinaldo,
+  2.5, inciso a, del Reglamento de la Ley 822) — **salvo que el negocio esté
+  registrado como Cuota Fija**, caso en el que esta retención tampoco se
+  calcula (ver la sección de régimen fiscal arriba). Tampoco acumula aguinaldo,
   vacaciones ni indemnización — son derechos del Código del Trabajo que no
   corresponden a quien presta un servicio de forma independiente. Esto se
   refleja en preplanilla/planilla, el Inicio (el INSS patronal e INATEC ya no

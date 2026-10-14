@@ -60,7 +60,7 @@ export default async function ColaboradoresPage() {
               className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm w-56"
             >
               <option value="LABORAL">Laboral (planilla, con prestaciones)</option>
-              <option value="SERVICIOS_PROFESIONALES">Servicios profesionales (honorarios, 10% retención)</option>
+              <option value="SERVICIOS_PROFESIONALES">Servicios profesionales (honorarios, sin relación laboral)</option>
             </select>
           </div>
           <label className="flex items-center gap-2 text-xs text-inkdim pb-2.5">
@@ -75,7 +75,9 @@ export default async function ColaboradoresPage() {
           ¿Muchos colaboradores a la vez? Súbelos desde Excel en <a href="/dashboard/nomina" className="text-gold">Correr nómina</a>.
           Un colaborador de <strong>servicios profesionales</strong> no acumula prestaciones (la casilla se ignora para él) — es
           una relación civil/mercantil sin subordinación, no un contrato laboral; confirma con un abogado si tienes dudas
-          sobre cuál aplica a un caso real.
+          sobre cuál aplica a un caso real. Por defecto se le retiene un 10% fijo (Art. 44 Reglamento Ley 822), salvo que
+          el negocio esté registrado como <strong>Cuota Fija</strong>, caso en el que no se retiene nada (ver Régimen fiscal
+          en el panel de proveedor).
         </p>
       </section>
 
