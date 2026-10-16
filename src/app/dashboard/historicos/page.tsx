@@ -277,7 +277,6 @@ export default async function HistoricosPage({
                         <input
                           readOnly
                           value={enlaceAprobacionDe(selectedPeriod.clientApprovalToken)}
-                          onFocus={(e) => e.currentTarget.select()}
                           className="flex-1 min-w-[260px] bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-xs font-mono text-inkdim"
                         />
                         <CopyLinkButton
