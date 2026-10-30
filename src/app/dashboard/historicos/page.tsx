@@ -469,6 +469,17 @@ function enlaceAprobacionDe(token: string): string {
   return `${base}/aprobar/${token}`;
 }
 
+// URL pública (mismo token) del PDF del listado de pago — con el detalle
+// por colaborador (nombre, cédula, cuenta bancaria, neto). Solo se incluye
+// en el mensaje de CONFIRMACIÓN (una vez que el período ya quedó APROBADA);
+// la API que la sirve (/api/aprobar/[token]/listado-pago) también está
+// gateada a status === "APROBADA", así que aunque se reenvíe ese mensaje
+// más adelante, el enlace nunca sirve datos antes de la aprobación final.
+function enlaceListadoPagoDe(token: string): string {
+  const base = (process.env.NEXTAUTH_URL || "").replace(/\/+$/, "");
+  return `${base}/api/aprobar/${token}/listado-pago`;
+}
+
 // Mensaje para pedirle la aprobación al cliente — se muestra mientras el
 // período sigue BORRADOR, listo para copiar y pegar en WhatsApp.
 // Cierre corporativo genérico, igual en los dos mensajes — no identifica a
@@ -483,9 +494,10 @@ function mensajeSolicitudAprobacion(p: { empresa: string; label: string; tipo: s
 }
 
 // Mensaje de confirmación una vez que el período ya quedó APROBADA en el
-// sistema — lleva solo el total y la cantidad de colaboradores (sin
-// nombres, cédulas ni cuentas bancarias), listo para copiar y pegar en
-// WhatsApp.
+// sistema — lleva el total y la cantidad de colaboradores, el enlace de
+// siempre y, aparte, el enlace directo al PDF del listado de pago (detalle
+// de cuenta bancaria por colaborador) — a pedido del negocio, para que el
+// cliente lo tenga a mano justo en este mensaje de confirmación.
 function mensajeConfirmacionAprobada(p: {
   empresa: string;
   label: string;
@@ -499,6 +511,8 @@ function mensajeConfirmacionAprobada(p: {
   return `Buen día. Gracias por su confirmación. Se comparte ${que} aprobada del período ${p.label} de ${
     p.empresa
   }. Total a pagar: ${money(p.total)} a ${p.colaboradores} colaborador${plural}. Puede verla aquí: ${enlaceAprobacionDe(
+    p.token
+  )}\n\nListado de pago (detalle de cuenta por colaborador): ${enlaceListadoPagoDe(
     p.token
   )}\n\n${CIERRE_CORPORATIVO}`;
 }

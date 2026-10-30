@@ -306,20 +306,34 @@ no depender de eso. En su lugar, cada período tiene un desplegable con un
   mensaje"** — lo pegas tal cual en WhatsApp, SMS o donde quieras.
 - Una vez que el período queda **APROBADA** en el sistema (con el botón de
   siempre, "Marcar como aprobada"), el mismo desplegable cambia a
-  **"Mensaje de confirmación (WhatsApp)"**, con un mensaje distinto que solo
-  lleva el total a pagar y la cantidad de colaboradores — nunca nombres,
-  cédulas ni cuentas bancarias — más el mismo enlace, para que el cliente lo
-  tenga como respaldo.
+  **"Mensaje de confirmación (WhatsApp)"**, con un mensaje distinto que
+  lleva el total a pagar, la cantidad de colaboradores, el mismo enlace de
+  siempre y, aparte, un enlace directo para **descargar el PDF del listado
+  de pago** (detalle por colaborador: nombre, cédula, cuenta bancaria y
+  neto) — a diferencia del mensaje de aprobación (BORRADOR), que no incluye
+  ese detalle.
 
-En ambos casos es el mismo enlace público de siempre: el cliente llega a
-una página sin necesidad de cuenta ni sesión, ve el resumen (negocio,
-período, colaboradores, total neto) y puede **descargar el PDF con el
-detalle completo** ahí mismo. Mientras el período sigue BORRADOR, también
+En ambos casos el enlace principal es el mismo de siempre: el cliente
+llega a una página sin necesidad de cuenta ni sesión, ve el resumen
+(negocio, período, colaboradores, total neto) y puede **descargar el PDF
+con el detalle completo** ahí mismo — esa página pública no muestra nombres,
+cédulas ni cuentas bancarias. Mientras el período sigue BORRADOR, también
 tiene el botón **"Aprobar prenómina"**; en cuanto el cliente le da clic, lo
 vas a ver en el detalle del período en Históricos y en el aviso del
 **Inicio** ("✓ el cliente aprobó desde el enlace"), y además te llega un
 **correo automático** avisando que el cliente ya aprobó, con el total, la
 cantidad de colaboradores y un enlace directo a ese período en Históricos.
+
+El enlace del listado de pago (`/api/aprobar/[token]/listado-pago`) es una
+ruta pública aparte, autenticada con el mismo token, que sí expone datos
+más sensibles (cuentas bancarias y cédulas) a quien la abra — por eso solo
+va en el mensaje de **confirmación** (una vez que el período ya quedó
+APROBADA) y no en el de aprobación, y por eso la API en sí está gateada a
+`status === "APROBADA"`: aunque alguien reenvíe ese mensaje más adelante o
+guarde el enlace, no sirve nada mientras el período siga en BORRADOR. Ten
+presente que, igual que el enlace principal, queda protegido solo por ser
+una URL larga y aleatoria (el token), no por una contraseña — compártelo
+con el mismo cuidado con el que compartes el resto del mensaje.
 
 Por defecto ese correo llega a todos los usuarios con acceso a esa cuenta
 del negocio en Ceiba, pero en Históricos hay un desplegable, **"¿A qué
