@@ -245,41 +245,34 @@ Excel también traiga el tipo de contrato, dime y se lo agrego.
 
 ---
 
-## Enviar por correo (pre-nómina / nómina / listado de pago)
+## Que el cliente apruebe desde un enlace de WhatsApp (sin correo, por ahora)
 
-Desde **Históricos**, dentro de cada período hay un desplegable "Enviar por
-correo": escribes el correo del destinatario, eliges el documento
-(preplanilla/planilla, o listado de pago si ya está aprobada) y, si quieres,
-un mensaje — se manda como adjunto en PDF, el mismo que descargas con los
-botones de arriba. Usa [Resend](https://resend.com) por debajo (ver las
-variables `RESEND_API_KEY` y `RESEND_FROM_EMAIL` en el Paso 4); mientras no
-las configures, el botón te avisa con un mensaje claro en vez de fallar en
-silencio, y mientras no verifiques tu propio dominio en Resend, solo puedes
-enviar a la casilla con la que creaste tu cuenta de Resend — verifica un
-dominio tuyo ahí para poder enviarle a cualquier cliente.
+Por el momento, Históricos no muestra la opción de "Enviar por correo" —
+se quitó de la vista mientras no haya un dominio verificado en Resend, para
+no depender de eso. En su lugar, cada período tiene un desplegable con un
+**mensaje de WhatsApp ya armado**, listo para copiar y pegar:
 
-### Que el cliente apruebe desde un enlace — por correo o copiándolo tú mismo
+- Mientras el período está **BORRADOR**, el desplegable se llama
+  **"Mensaje de aprobación (WhatsApp)"**. Si todavía no existe el enlace, un
+  botón **"Generar enlace"** lo crea; una vez generado, ves el mensaje
+  completo en un cuadro de texto (algo como *"Buen día. Se comparte la
+  nómina del período {período} de {tu negocio} para su aprobación. Favor
+  aprobar en el siguiente enlace: {enlace}"*) con un botón **"Copiar
+  mensaje"** — lo pegas tal cual en WhatsApp, SMS o donde quieras.
+- Una vez que el período queda **APROBADA** en el sistema (con el botón de
+  siempre, "Marcar como aprobada"), el mismo desplegable cambia a
+  **"Mensaje de confirmación (WhatsApp)"**, con un mensaje distinto que solo
+  lleva el total a pagar y la cantidad de colaboradores — nunca nombres,
+  cédulas ni cuentas bancarias — más el mismo enlace, para que el cliente lo
+  tenga como respaldo.
 
-Hay dos formas de que el cliente llegue al mismo enlace de aprobación, para
-un período BORRADOR:
-
-- **Por correo**, automático: cuando envías la preplanilla por correo desde
-  "Enviar por correo" (ver arriba), el correo trae el enlace incluido.
-- **Sin correo**, a mano: en el detalle del período en Históricos hay una
-  sección aparte, **"Enlace de aprobación (sin correo)"**, con un botón
-  **"Generar enlace de aprobación"**. Al darle clic, Ceiba genera el enlace y
-  te lo muestra con un botón **"Copiar enlace"** — lo pegas tú mismo donde
-  quieras (WhatsApp, SMS, tu correo personal) sin que Ceiba tenga que enviar
-  nada ni que configures Resend. Esta es la opción si no quieres (o no
-  puedes todavía) configurar un proveedor de correo.
-
-En cualquiera de los dos casos, el cliente llega a la misma página pública:
-ve un resumen (negocio, período, colaboradores, total neto), puede
-**descargar el PDF con el detalle completo** ahí mismo, y tiene un botón
-**"Aprobar prenómina"** — todo sin crear cuenta ni iniciar sesión en Ceiba.
-En cuanto el cliente aprueba, lo vas a ver en dos lugares: el aviso de
-borrador pendiente en el **Inicio**, y el detalle del período en
-**Históricos** (ambos muestran "✓ el cliente aprobó desde el enlace").
+En ambos casos es el mismo enlace público de siempre: el cliente llega a
+una página sin necesidad de cuenta ni sesión, ve el resumen (negocio,
+período, colaboradores, total neto) y puede **descargar el PDF con el
+detalle completo** ahí mismo. Mientras el período sigue BORRADOR, también
+tiene el botón **"Aprobar prenómina"**; en cuanto el cliente le da clic, lo
+vas a ver en el detalle del período en Históricos y en el aviso del
+**Inicio** ("✓ el cliente aprobó desde el enlace").
 
 **A propósito, esa aprobación desde el enlace NO cambia nada en el sistema
 por sí sola** — el período sigue en BORRADOR hasta que tú (o quien tenga
@@ -290,14 +283,15 @@ en el sistema; el enlace solo deja constancia de que el cliente ya dio su
 visto bueno, para que la aprobación final la sigas dando tú con el mismo
 criterio de siempre.
 
-El enlace es siempre el mismo para ese período (no se invalida ni cambia,
-sin importar si lo generaste a mano o si salió de un correo), y sigue
-funcionando aunque el cliente ya haya hecho clic antes — en ese caso solo le
-muestra que ya aprobó y la fecha. Si el período ya quedó aprobado dentro del
-sistema, el enlace lo avisa y no ofrece nada más que hacer. Necesita la
-misma variable `NEXTAUTH_URL` del Paso 4 (la URL pública de tu sitio) para
-armar el enlace correctamente — eso sí lo necesitas tener configurado,
-aunque no uses Resend para nada.
+El enlace es siempre el mismo para ese período (no se invalida ni cambia) y
+sigue funcionando aunque el cliente ya haya hecho clic antes — en ese caso
+solo le muestra que ya aprobó y la fecha. Necesita la variable
+`NEXTAUTH_URL` del Paso 4 (la URL pública de tu sitio) para armar el enlace
+correctamente.
+
+La función de enviar por correo (con Resend) sigue en el código por si más
+adelante quieres reactivarla — solo está escondida de la pantalla de
+Históricos mientras tanto.
 
 ---
 

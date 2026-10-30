@@ -796,10 +796,17 @@ export async function enviarPlanillaPorCorreo(formData: FormData) {
 }
 
 /**
- * Genera (o reutiliza) el enlace de aprobación de una preplanilla SIN
- * enviar ningún correo — para que lo copies y lo mandes tú mismo por donde
- * quieras (WhatsApp, SMS, tu propio correo). No depende de Resend ni de
- * ninguna variable de entorno de correo.
+ * Genera (o reutiliza) el enlace de aprobación/confirmación de un período
+ * SIN enviar ningún correo — para que lo copies y lo mandes tú mismo por
+ * donde quieras (WhatsApp, SMS, tu propio correo). No depende de Resend ni
+ * de ninguna variable de entorno de correo.
+ *
+ * Sirve para los dos momentos del flujo, usando el mismo token: mientras el
+ * período está BORRADOR es el enlace para pedirle aprobación al cliente
+ * (/aprobar/[token] muestra el botón "Aprobar prenómina"); una vez que el
+ * período queda APROBADA, el mismo enlace sirve como confirmación — la
+ * página pública ya detecta status === "APROBADA" y solo muestra el
+ * resumen (total + colaboradores), sin ningún botón.
  */
 export async function generarEnlaceAprobacion(formData: FormData) {
   const companyId = await requireCompanyId();
@@ -808,13 +815,6 @@ export async function generarEnlaceAprobacion(formData: FormData) {
   const period = await prisma.payrollPeriod.findUnique({ where: { id: periodId } });
   if (!period || period.companyId !== companyId) {
     redirect(`/dashboard/historicos?correoError=${encodeURIComponent("No encontré ese período.")}`);
-  }
-  if (period!.status !== "BORRADOR") {
-    redirect(
-      `/dashboard/historicos?periodo=${periodId}&correoError=${encodeURIComponent(
-        "El enlace de aprobación solo aplica a una preplanilla pendiente (BORRADOR)."
-      )}`
-    );
   }
 
   await obtenerOCrearEnlaceAprobacion(period!.id, period!.clientApprovalToken);

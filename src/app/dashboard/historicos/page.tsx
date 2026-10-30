@@ -6,9 +6,13 @@ import CopyLinkButton from "@/components/CopyLinkButton";
 import {
   aprobarPlanilla,
   eliminarBorrador,
-  enviarPlanillaPorCorreo,
   generarEnlaceAprobacion,
 } from "@/app/dashboard/actions";
+
+// El envío por correo (enviarPlanillaPorCorreo, en actions.ts) se deja de
+// mostrar aquí por el momento — el negocio pidió usar enlaces para
+// WhatsApp en su lugar — pero la función y src/lib/email.ts se quedan tal
+// cual en el código por si se vuelve a activar más adelante.
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +44,11 @@ export default async function HistoricosPage({
   }
   const session = await getServerSession(authOptions);
   const companyId = (session?.user as any)?.companyId as string;
+
+  // Solo el nombre, para armar el mensaje de WhatsApp del enlace de
+  // aprobación/confirmación más abajo — el resto de la página no necesita
+  // los datos del negocio porque es el propio negocio viendo lo suyo.
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
 
   const periods = await prisma.payrollPeriod.findMany({
     where: { companyId },
@@ -82,6 +91,32 @@ export default async function HistoricosPage({
     return { mes, total: delMes.reduce((acc, p) => acc + netoDePeriodo(p), 0) };
   });
   const maxMes = Math.max(1, ...totalesPorMes.map((t) => t.total));
+
+  // Mensaje de WhatsApp listo para copiar y pegar, armado alrededor del
+  // mismo enlace de aprobación/confirmación (generarEnlaceAprobacion en
+  // actions.ts). Antes de que el negocio apruebe en el sistema, pide la
+  // aprobación del cliente; una vez APROBADA, es solo un aviso de
+  // confirmación con el total — en ambos casos el enlace público
+  // (/aprobar/[token]) ya muestra nada más el total y la cantidad de
+  // colaboradores, sin nombres ni datos sensibles.
+  const mensajeEnlace: string | null =
+    selectedPeriod && selectedPeriod.clientApprovalToken
+      ? selectedPeriod.status === "BORRADOR"
+        ? mensajeSolicitudAprobacion({
+            empresa: company?.name ?? "tu negocio",
+            label: selectedPeriod.label,
+            tipo: selectedPeriod.tipo,
+            token: selectedPeriod.clientApprovalToken,
+          })
+        : mensajeConfirmacionAprobada({
+            empresa: company?.name ?? "tu negocio",
+            label: selectedPeriod.label,
+            tipo: selectedPeriod.tipo,
+            token: selectedPeriod.clientApprovalToken,
+            total: netoDePeriodo(selectedPeriod),
+            colaboradores: selectedPeriod.payslips.length,
+          })
+      : null;
 
   return (
     <div>
@@ -259,88 +294,43 @@ export default async function HistoricosPage({
               </div>
             </div>
 
-            {selectedPeriod.status === "BORRADOR" && (
-              <details className="border border-line rounded-lg px-4 py-3 mb-5 group" open={!selectedPeriod.clientApprovalToken}>
-                <summary className="cursor-pointer text-sm text-inkdim hover:text-gold transition list-none flex items-center gap-2">
-                  <span className="text-inkfaint text-xs group-open:rotate-90 transition-transform">▸</span>
-                  Enlace de aprobación (sin correo)
-                </summary>
-                <div className="mt-4">
-                  {selectedPeriod.clientApprovalToken ? (
-                    <>
-                      <p className="text-inkfaint text-xs mb-2">
-                        Copia este enlace y mándalo tú mismo por donde quieras — WhatsApp, SMS, tu correo personal —
-                        sin que Ceiba tenga que enviar nada. El cliente ve un resumen, puede descargar el PDF y
-                        aprobar sin iniciar sesión.
-                      </p>
-                      <div className="flex flex-wrap gap-2 items-stretch">
-                        <input
-                          readOnly
-                          value={enlaceAprobacionDe(selectedPeriod.clientApprovalToken)}
-                          className="flex-1 min-w-[260px] bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-xs font-mono text-inkdim"
-                        />
-                        <CopyLinkButton
-                          text={enlaceAprobacionDe(selectedPeriod.clientApprovalToken)}
-                          className="px-4 py-2.5 rounded-lg bg-gold text-[#1b1500] text-sm font-medium whitespace-nowrap"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <form action={generarEnlaceAprobacion}>
-                      <input type="hidden" name="periodId" value={selectedPeriod.id} />
-                      <SubmitButton
-                        className="px-4 py-2.5 rounded-lg bg-gold text-[#1b1500] text-sm font-medium"
-                        pendingText="Generando…"
-                      >
-                        Generar enlace de aprobación
-                      </SubmitButton>
-                    </form>
-                  )}
-                </div>
-              </details>
-            )}
-
-            <details className="border border-line rounded-lg px-4 py-3 mb-5 group">
+            <details className="border border-line rounded-lg px-4 py-3 mb-5 group" open={!selectedPeriod.clientApprovalToken}>
               <summary className="cursor-pointer text-sm text-inkdim hover:text-gold transition list-none flex items-center gap-2">
                 <span className="text-inkfaint text-xs group-open:rotate-90 transition-transform">▸</span>
-                Enviar por correo
+                {selectedPeriod.status === "BORRADOR" ? "Mensaje de aprobación (WhatsApp)" : "Mensaje de confirmación (WhatsApp)"}
               </summary>
-              <form action={enviarPlanillaPorCorreo} className="flex flex-wrap gap-3 items-end mt-4">
-                <input type="hidden" name="periodId" value={selectedPeriod.id} />
-                <div>
-                  <label className="block text-xs text-inkdim mb-1.5">Correo del destinatario</label>
-                  <input
-                    name="destinatario" type="email" required placeholder="cliente@negocio.com"
-                    className="w-64 bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-inkdim mb-1.5">Documento</label>
-                  <select name="documento" className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
-                    <option value="preplanilla">
-                      {selectedPeriod.status === "BORRADOR" ? "Preplanilla (PDF)" : "Planilla (PDF)"}
-                    </option>
-                    {selectedPeriod.status === "APROBADA" && <option value="listado">Listado de pago (PDF)</option>}
-                  </select>
-                </div>
-                <div className="flex-1 min-w-[220px]">
-                  <label className="block text-xs text-inkdim mb-1.5">Mensaje (opcional)</label>
-                  <input
-                    name="mensaje" type="text" placeholder="Ej. Aquí está la nómina de este período para tu revisión."
-                    className="w-full bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm"
-                  />
-                </div>
-                <SubmitButton className="px-4 py-2.5 rounded-lg bg-gold text-[#1b1500] text-sm font-medium" pendingText="Enviando…">
-                  Enviar
-                </SubmitButton>
-              </form>
-              <p className="text-inkfaint text-xs mt-3">
-                Se manda como adjunto en PDF, igual al que descargas arriba. Si el documento es la preplanilla de un
-                período BORRADOR, el correo también incluye un enlace para que el cliente apruebe sin tener que
-                entrar a Ceiba — cuando lo haga, lo verás aquí arriba. Esa aprobación por correo es solo una
-                constancia: la aprobación final sigue siendo el botón "Marcar como aprobada". Requiere tener
-                configurada la variable RESEND_API_KEY en Vercel — si no, te avisa aquí en vez de fallar en silencio.
-              </p>
+              <div className="mt-4">
+                {selectedPeriod.clientApprovalToken && mensajeEnlace ? (
+                  <>
+                    <p className="text-inkfaint text-xs mb-2">
+                      {selectedPeriod.status === "BORRADOR"
+                        ? "Copia este mensaje y mándalo tú mismo por WhatsApp (o por donde quieras) — ya trae el enlace para que el cliente revise el resumen, descargue el PDF y apruebe sin iniciar sesión."
+                        : "Ya quedó aprobada en el sistema. Copia este mensaje para avisarle al cliente por WhatsApp — solo lleva el total y la cantidad de colaboradores, sin nombres ni datos sensibles."}
+                    </p>
+                    <textarea
+                      readOnly
+                      rows={5}
+                      value={mensajeEnlace}
+                      className="w-full bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-xs font-mono text-inkdim resize-none mb-2.5"
+                    />
+                    <CopyLinkButton
+                      text={mensajeEnlace}
+                      label="Copiar mensaje"
+                      className="px-4 py-2.5 rounded-lg bg-gold text-[#1b1500] text-sm font-medium whitespace-nowrap"
+                    />
+                  </>
+                ) : (
+                  <form action={generarEnlaceAprobacion}>
+                    <input type="hidden" name="periodId" value={selectedPeriod.id} />
+                    <SubmitButton
+                      className="px-4 py-2.5 rounded-lg bg-gold text-[#1b1500] text-sm font-medium"
+                      pendingText="Generando…"
+                    >
+                      Generar enlace
+                    </SubmitButton>
+                  </form>
+                )}
+              </div>
             </details>
 
             <div className="space-y-3">
@@ -433,4 +423,38 @@ function money(n: number) {
 function enlaceAprobacionDe(token: string): string {
   const base = (process.env.NEXTAUTH_URL || "").replace(/\/+$/, "");
   return `${base}/aprobar/${token}`;
+}
+
+// Mensaje para pedirle la aprobación al cliente — se muestra mientras el
+// período sigue BORRADOR, listo para copiar y pegar en WhatsApp.
+// Cierre corporativo genérico, igual en los dos mensajes — no identifica a
+// ningún negocio en particular porque Ceiba lo usan distintas empresas.
+const CIERRE_CORPORATIVO = "Quedamos atentos a cualquier consulta. Saludos cordiales.";
+
+function mensajeSolicitudAprobacion(p: { empresa: string; label: string; tipo: string; token: string }): string {
+  const que = p.tipo === "AGUINALDO" ? "la nómina de aguinaldo" : "la nómina";
+  return `Buen día. Se comparte ${que} del período ${p.label} de ${p.empresa} para su aprobación. Favor aprobar en el siguiente enlace: ${enlaceAprobacionDe(
+    p.token
+  )}\n\n${CIERRE_CORPORATIVO}`;
+}
+
+// Mensaje de confirmación una vez que el período ya quedó APROBADA en el
+// sistema — lleva solo el total y la cantidad de colaboradores (sin
+// nombres, cédulas ni cuentas bancarias), listo para copiar y pegar en
+// WhatsApp.
+function mensajeConfirmacionAprobada(p: {
+  empresa: string;
+  label: string;
+  tipo: string;
+  token: string;
+  total: number;
+  colaboradores: number;
+}): string {
+  const que = p.tipo === "AGUINALDO" ? "la nómina de aguinaldo" : "la nómina";
+  const plural = p.colaboradores === 1 ? "" : "es";
+  return `Buen día. Gracias por su confirmación. Se comparte ${que} aprobada del período ${p.label} de ${
+    p.empresa
+  }. Total a pagar: ${money(p.total)} a ${p.colaboradores} colaborador${plural}. Puede verla aquí: ${enlaceAprobacionDe(
+    p.token
+  )}\n\n${CIERRE_CORPORATIVO}`;
 }
