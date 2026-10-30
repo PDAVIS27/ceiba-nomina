@@ -68,7 +68,7 @@ async function avisarAprobacionPorCorreo(period: any) {
     : period.company.users.filter((u: any) => u.role === "COMPANY_OWNER").map((u: any) => u.email);
   if (destinatarios.length === 0) return;
 
-  const total = period.payslips.reduce((acc, ps) => acc + Number(ps.netPay), 0);
+  const total = period.payslips.reduce((acc: number, ps: any) => acc + Number(ps.netPay), 0);
   const base = (process.env.NEXTAUTH_URL || "").replace(/\/+$/, "");
   const enlaceHistoricos = `${base}/dashboard/historicos?periodo=${period.id}`;
   const que = period.tipo === "AGUINALDO" ? "la nómina de aguinaldo" : "la nómina";
