@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import SubmitButton from "@/components/SubmitButton";
 import CeibaLogo from "@/components/CeibaLogo";
+import { enviarAvisoPorCorreo } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -26,15 +27,59 @@ async function aprobarPorCorreo(formData: FormData) {
   "use server";
   const token = String(formData.get("token") || "");
   if (!token) return;
-  const period = await prisma.payrollPeriod.findUnique({ where: { clientApprovalToken: token } });
+  const period = await prisma.payrollPeriod.findUnique({
+    where: { clientApprovalToken: token },
+    include: { company: { include: { users: true } }, payslips: true },
+  });
   if (!period) return;
   if (!period.clientApprovedAt) {
     await prisma.payrollPeriod.update({
       where: { id: period.id },
       data: { clientApprovedAt: new Date() },
     });
+    // Avisa por correo a quien tenga acceso a la cuenta de este negocio en
+    // Ceiba — para que no dependa de entrar a revisar Inicio/Históricos
+    // para darse cuenta de que el cliente ya aprobó. Si Resend no está
+    // configurado o el envío falla, no interrumpe el flujo del cliente: la
+    // aprobación de todas formas queda guardada arriba.
+    try {
+      await avisarAprobacionPorCorreo(period);
+    } catch {
+      // silencioso — el aviso es un plus, no debe tumbar la página pública.
+    }
   }
   redirect(`/aprobar/${token}`);
+}
+
+// El tipo exacto de "period" aquí (período + company.users + payslips) sale
+// del include de arriba; se deja como any porque en este entorno de
+// verificación los tipos de Prisma no se resuelven del todo (ver README /
+// notas del proyecto) — no afecta el comportamiento en producción.
+async function avisarAprobacionPorCorreo(period: any) {
+  // El negocio puede elegir su propio correo de avisos (Históricos →
+  // actualizarCorreoAvisoAprobacion, en actions.ts). Si no configuró nada,
+  // cae por defecto a los correos de acceso del negocio en Ceiba, para que
+  // nunca se quede sin avisarle a nadie.
+  const destinatarios: string[] = period.company.avisoAprobacionEmail
+    ? period.company.avisoAprobacionEmail
+        .split(",")
+        .map((c: string) => c.trim())
+        .filter(Boolean)
+    : period.company.users.filter((u: any) => u.role === "COMPANY_OWNER").map((u: any) => u.email);
+  if (destinatarios.length === 0) return;
+
+  const total = period.payslips.reduce((acc, ps) => acc + Number(ps.netPay), 0);
+  const base = (process.env.NEXTAUTH_URL || "").replace(/\/+$/, "");
+  const enlaceHistoricos = `${base}/dashboard/historicos?periodo=${period.id}`;
+  const que = period.tipo === "AGUINALDO" ? "la nómina de aguinaldo" : "la nómina";
+
+  await enviarAvisoPorCorreo({
+    destinatarios,
+    asunto: `Ceiba — el cliente aprobó ${que} del período ${period.label}`,
+    mensaje: `El cliente de ${period.company.name} aprobó ${que} del período ${period.label} desde el enlace que le compartiste.\n\nTotal: ${money(
+      total
+    )} a ${period.payslips.length} colaborador${period.payslips.length === 1 ? "" : "es"}.\n\nTodavía falta que entres a Ceiba y le des clic a "Marcar como aprobada" para que quede aprobada de forma final: ${enlaceHistoricos}`,
+  });
 }
 
 export default async function AprobarPorCorreoPage({ params }: { params: { token: string } }) {

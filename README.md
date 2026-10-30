@@ -272,7 +272,21 @@ período, colaboradores, total neto) y puede **descargar el PDF con el
 detalle completo** ahí mismo. Mientras el período sigue BORRADOR, también
 tiene el botón **"Aprobar prenómina"**; en cuanto el cliente le da clic, lo
 vas a ver en el detalle del período en Históricos y en el aviso del
-**Inicio** ("✓ el cliente aprobó desde el enlace").
+**Inicio** ("✓ el cliente aprobó desde el enlace"), y además te llega un
+**correo automático** avisando que el cliente ya aprobó, con el total, la
+cantidad de colaboradores y un enlace directo a ese período en Históricos.
+
+Por defecto ese correo llega a todos los usuarios con acceso a esa cuenta
+del negocio en Ceiba, pero en Históricos hay un desplegable, **"¿A qué
+correo quieres que te avisen cuando tu cliente apruebe?"**, donde puedes
+poner uno o varios correos distintos (separados por coma) — útil si quieres
+que le llegue a alguien que no tiene cuenta en Ceiba, o a varias personas a
+la vez. Si lo dejas vacío, vuelve al comportamiento por defecto.
+
+Ese correo usa la misma configuración de Resend del Paso 4
+(`RESEND_API_KEY` / `RESEND_FROM_EMAIL`); si no la tienes configurada, el
+aviso simplemente no se envía — no rompe nada en la página del cliente, y
+de todas formas puedes verlo entrando a Inicio/Históricos.
 
 **A propósito, esa aprobación desde el enlace NO cambia nada en el sistema
 por sí sola** — el período sigue en BORRADOR hasta que tú (o quien tenga

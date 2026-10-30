@@ -7,6 +7,7 @@ import {
   aprobarPlanilla,
   eliminarBorrador,
   generarEnlaceAprobacion,
+  actualizarCorreoAvisoAprobacion,
 } from "@/app/dashboard/actions";
 
 // El envío por correo (enviarPlanillaPorCorreo, en actions.ts) se deja de
@@ -32,6 +33,7 @@ export default async function HistoricosPage({
     omitidosDetalle?: string;
     correoOk?: string;
     correoError?: string;
+    avisoGuardado?: string;
   };
 }) {
   let omitidosDetalle: string[] = [];
@@ -48,7 +50,10 @@ export default async function HistoricosPage({
   // Solo el nombre, para armar el mensaje de WhatsApp del enlace de
   // aprobación/confirmación más abajo — el resto de la página no necesita
   // los datos del negocio porque es el propio negocio viendo lo suyo.
-  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { name: true, avisoAprobacionEmail: true },
+  });
 
   const periods = await prisma.payrollPeriod.findMany({
     where: { companyId },
@@ -144,6 +149,43 @@ export default async function HistoricosPage({
       {searchParams.correoError && (
         <div className="bg-lava/10 border border-lava rounded-lg p-3 mb-6 text-sm">{searchParams.correoError}</div>
       )}
+      {searchParams.avisoGuardado && (
+        <div className="bg-emerald/10 border border-emerald rounded-lg p-3 mb-6 text-sm">
+          Guardado. Los próximos avisos de aprobación de tus clientes llegarán ahí.
+        </div>
+      )}
+
+      <details className="border border-line rounded-xl px-4 py-3 mb-6 group">
+        <summary className="cursor-pointer text-sm text-inkdim hover:text-gold transition list-none flex items-center gap-2">
+          <span className="text-inkfaint text-xs group-open:rotate-90 transition-transform">▸</span>
+          ¿A qué correo quieres que te avisen cuando tu cliente apruebe?
+        </summary>
+        <form
+          action={actualizarCorreoAvisoAprobacion}
+          className="mt-4 flex flex-wrap gap-3 items-end"
+        >
+          <input type="hidden" name="periodId" value={selectedPeriod?.id ?? ""} />
+          <div className="flex-1 min-w-[260px]">
+            <label className="block text-xs text-inkdim mb-1.5">
+              Correo(s) para avisos de aprobación — separados por coma si son varios
+            </label>
+            <input
+              name="avisoAprobacionEmail"
+              type="text"
+              defaultValue={company?.avisoAprobacionEmail ?? ""}
+              placeholder="tucorreo@negocio.com, otra-persona@negocio.com"
+              className="w-full bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm"
+            />
+          </div>
+          <SubmitButton className="px-4 py-2.5 rounded-lg bg-gold text-[#1b1500] text-sm font-medium" pendingText="Guardando…">
+            Guardar
+          </SubmitButton>
+        </form>
+        <p className="text-inkfaint text-xs mt-3">
+          Por defecto, el aviso le llega al correo con el que accedes a Ceiba. Si prefieres que llegue a otro correo
+          (o a varios), dilo aquí. Déjalo vacío para volver al comportamiento por defecto.
+        </p>
+      </details>
 
       {periods.length === 0 && (
         <div className="bg-panel border border-line rounded-xl p-6 text-inkfaint text-sm">

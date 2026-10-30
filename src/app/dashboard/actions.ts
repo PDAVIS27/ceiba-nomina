@@ -820,3 +820,36 @@ export async function generarEnlaceAprobacion(formData: FormData) {
   await obtenerOCrearEnlaceAprobacion(period!.id, period!.clientApprovalToken);
   redirect(`/dashboard/historicos?periodo=${periodId}&enlaceGenerado=1`);
 }
+
+/**
+ * Deja que el propio negocio elija a qué correo(s) quiere que le llegue el
+ * aviso automático cuando SU cliente aprueba una nómina desde el enlace
+ * público (ver avisarAprobacionPorCorreo en src/app/aprobar/[token]/page.tsx).
+ * Admite varios correos separados por coma (ej. para que le llegue a dos
+ * personas del negocio). Si se deja vacío, el aviso vuelve a caer por
+ * defecto a los correos de acceso del negocio en Ceiba.
+ */
+export async function actualizarCorreoAvisoAprobacion(formData: FormData) {
+  const companyId = await requireCompanyId();
+  const periodId = String(formData.get("periodId") || "");
+  const crudo = String(formData.get("avisoAprobacionEmail") || "").trim();
+
+  const correos = crudo
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const invalido = correos.find((c) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c));
+  if (invalido) {
+    redirect(
+      `/dashboard/historicos?periodo=${periodId}&correoError=${encodeURIComponent(
+        `"${invalido}" no parece un correo válido.`
+      )}`
+    );
+  }
+
+  await prisma.company.update({
+    where: { id: companyId },
+    data: { avisoAprobacionEmail: correos.length > 0 ? correos.join(", ") : null },
+  });
+  redirect(`/dashboard/historicos?periodo=${periodId}&avisoGuardado=1`);
+}

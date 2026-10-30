@@ -105,6 +105,13 @@ model Company {
   // Solo informativo — ver comentario de RegimenFiscal. No afecta el cálculo
   // de nómina.
   regimenFiscal  RegimenFiscal   @default(GENERAL)
+  // Correo(s) a donde el NEGOCIO quiere que le llegue el aviso cuando SU
+  // cliente aprueba una nómina desde el enlace público (/aprobar/[token]).
+  // Lo configura el propio negocio en Históricos. Admite varios correos
+  // separados por coma. Si queda vacío, el aviso cae por defecto a los
+  // correos de acceso (los de los usuarios con rol COMPANY_OWNER de este
+  // negocio) — así nunca se deja de avisar a nadie.
+  avisoAprobacionEmail String?
   createdAt      DateTime        @default(now())
   users          User[]
   employees      Employee[]

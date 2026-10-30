@@ -124,7 +124,7 @@ export default async function AdminPage({
   searchParams: { created?: string; pwd?: string; error?: string };
 }) {
   const companies = await prisma.company.findMany({
-    include: { employees: true },
+    include: { employees: true, users: true },
     orderBy: { createdAt: "desc" },
   });
   const cases = await prisma.supportCase.findMany({
@@ -188,7 +188,7 @@ export default async function AdminPage({
         <table className="w-full text-sm mb-6">
           <thead>
             <tr className="text-inkfaint text-xs uppercase font-mono text-left border-b border-linestrong">
-              <th className="pb-2">Negocio</th><th className="pb-2">Colaboradores</th>
+              <th className="pb-2">Negocio</th><th className="pb-2">Correo (acceso / avisos)</th><th className="pb-2">Colaboradores</th>
               <th className="pb-2">INSS patronal</th><th className="pb-2">Régimen fiscal</th><th className="pb-2">Estado</th>
             </tr>
           </thead>
@@ -196,6 +196,9 @@ export default async function AdminPage({
             {companies.map((c) => (
               <tr key={c.id} className="border-b border-line">
                 <td className="py-3 font-medium">{c.name}</td>
+                <td className="py-3 text-xs font-mono text-inkdim">
+                  {c.users.length > 0 ? c.users.map((u: any) => u.email).join(", ") : "—"}
+                </td>
                 <td className="py-3">{c.employees.length}</td>
                 <td className="py-3">{c.employees.length >= 50 ? "22.5%" : "21.5%"}</td>
                 <td className="py-3">
@@ -225,7 +228,7 @@ export default async function AdminPage({
               </tr>
             ))}
             {companies.length === 0 && (
-              <tr><td colSpan={5} className="py-6 text-center text-inkfaint">Todavía no registras negocios.</td></tr>
+              <tr><td colSpan={6} className="py-6 text-center text-inkfaint">Todavía no registras negocios.</td></tr>
             )}
           </tbody>
         </table>
