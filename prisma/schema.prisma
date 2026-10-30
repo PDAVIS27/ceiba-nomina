@@ -165,6 +165,13 @@ model PayrollPeriod {
   label      String
   status     String     @default("BORRADOR") // BORRADOR (pendiente de aprobación) | APROBADA (final)
   tipo       TipoPeriodo @default(NOMINA)
+  // MENSUAL (por defecto) | QUINCENAL — ver calcularPeriodo() en
+  // src/lib/payroll.ts. "Salario mensual" en Colaboradores/Excel SIEMPRE es
+  // el salario de referencia completo; cuando el período es QUINCENAL, el
+  // motor de cálculo prorratea solo la base salarial (mitad) y las
+  // provisiones (mitad), recalculando el IR sobre una proyección anual de
+  // 24 quincenas en vez de 12 meses — no hay que dividir el salario a mano.
+  periodicidad String   @default("MENSUAL")
   createdAt  DateTime   @default(now())
   approvedAt DateTime?
   payslips   Payslip[]

@@ -285,7 +285,9 @@ export default async function HistoricosPage({
             <div className="flex justify-between items-center flex-wrap gap-3 mb-4">
               <div className="text-xs text-inkfaint font-mono">
                 {selectedPeriod.tipo === "AGUINALDO" && <span className="text-gold">🎁 AGUINALDO · </span>}
-                {selectedPeriod.label} · {selectedPeriod.payslips.length} comprobantes ·{" "}
+                {selectedPeriod.label}
+                {selectedPeriod.periodicidad === "QUINCENAL" && " · Quincenal"} ·{" "}
+                {selectedPeriod.payslips.length} comprobantes ·{" "}
                 <span className={selectedPeriod.status === "BORRADOR" ? "text-gold" : "text-emerald"}>
                   {selectedPeriod.status === "BORRADOR" ? "BORRADOR — pendiente de aprobación" : "APROBADA"}
                 </span>

@@ -127,10 +127,10 @@ export async function balanceProvisiones(employeeId: string, hasta: Date = new D
   let vacacionesProrrateo = 0;
   let indemnizacionProrrateo = 0;
 
-  // Servicios profesionales nunca acumula, y un colaborador LABORAL puede
-  // tener la acumulación apagada a mano (ver Employee.acumulaPrestaciones) —
-  // en ambos casos no se prorratea nada del tramo final.
-  const acumula = employee ? employee.tipoContrato !== "SERVICIOS_PROFESIONALES" && employee.acumulaPrestaciones : false;
+  // Employee.acumulaPrestaciones decide, sin importar el tipo de contrato
+  // (ver nota en calcularPeriodo(), src/lib/payroll.ts) — si está apagado no
+  // se prorratea nada del tramo final.
+  const acumula = employee ? employee.acumulaPrestaciones : false;
 
   if (employee && acumula) {
     const fechasCobertura = payslips.map((p) => p.period.periodEnd ?? p.createdAt);
@@ -284,11 +284,13 @@ export async function calcularLiquidacion(
   tipoContrato: TipoContratoKey = "LABORAL"
 ): Promise<DesgloseLiquidacion> {
   const balance = await balanceProvisiones(employeeId, terminatedAt);
-  // Un colaborador de servicios profesionales nunca acumula indemnización
-  // (no es un derecho laboral del Código del Trabajo para este tipo de
-  // contrato), sin importar el motivo de la baja.
-  const aplicaIndemnizacion =
-    tipoContrato === "SERVICIOS_PROFESIONALES" ? false : aplicaIndemnizacionPorTipo(terminationType);
+  // La elegibilidad depende del motivo de la baja — ver aplicaIndemnizacionPorTipo().
+  // Si el colaborador no acumula prestaciones (normal para servicios
+  // profesionales, salvo que el negocio lo haya activado a mano — ver
+  // Employee.acumulaPrestaciones), balance.indemnizacionAcumulada ya viene
+  // en cero desde balanceProvisiones(), así que no hace falta repetir aquí
+  // ningún chequeo de tipo de contrato.
+  const aplicaIndemnizacion = aplicaIndemnizacionPorTipo(terminationType);
   const indemnizacion = aplicaIndemnizacion ? balance.indemnizacionAcumulada : 0;
 
   const horasExtraMonto = round2(calcularHorasExtra(balance.salarioActual, Math.max(horasExtraCantidad, 0)));

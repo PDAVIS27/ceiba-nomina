@@ -7,6 +7,7 @@ import { esExentoIR } from "@/lib/regimenFiscal";
 import { TERMINATION_LABELS } from "@/lib/provisiones";
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
+import TipoContratoYPrestaciones from "@/components/TipoContratoYPrestaciones";
 import { addEmployee } from "@/app/dashboard/actions";
 
 export const dynamic = "force-dynamic";
@@ -52,32 +53,20 @@ export default async function ColaboradoresPage() {
           <Field name="role" label="Puesto / Departamento" placeholder="Ej. Cajera" />
           <Field name="grossSalary" label="Salario bruto (C$)" type="number" placeholder="9200" />
           <Field name="startDate" label="Fecha de ingreso" type="date" />
-          <div>
-            <label className="block text-xs text-inkdim mb-1.5">Tipo de contrato</label>
-            <select
-              name="tipoContrato"
-              defaultValue="LABORAL"
-              className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm w-56"
-            >
-              <option value="LABORAL">Laboral (planilla, con prestaciones)</option>
-              <option value="SERVICIOS_PROFESIONALES">Servicios profesionales (honorarios, sin relación laboral)</option>
-            </select>
-          </div>
-          <label className="flex items-center gap-2 text-xs text-inkdim pb-2.5">
-            <input type="checkbox" name="acumulaPrestaciones" defaultChecked className="accent-emerald" />
-            Acumula aguinaldo / vacaciones / antigüedad
-          </label>
+          <TipoContratoYPrestaciones defaultTipoContrato="LABORAL" defaultAcumulaPrestaciones={true} />
           <SubmitButton className="px-5 py-3 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium">
             Agregar
           </SubmitButton>
         </form>
         <p className="text-inkfaint text-xs mt-3">
           ¿Muchos colaboradores a la vez? Súbelos desde Excel en <a href="/dashboard/nomina" className="text-gold">Correr nómina</a>.
-          Un colaborador de <strong>servicios profesionales</strong> no acumula prestaciones (la casilla se ignora para él) — es
-          una relación civil/mercantil sin subordinación, no un contrato laboral; confirma con un abogado si tienes dudas
-          sobre cuál aplica a un caso real. Por defecto se le retiene un 10% fijo (Art. 44 Reglamento Ley 822), salvo que
-          el negocio esté registrado como <strong>Cuota Fija</strong>, caso en el que no se retiene nada (ver Régimen fiscal
-          en el panel de proveedor).
+          Un colaborador de <strong>servicios profesionales</strong> normalmente NO acumula prestaciones — es una relación
+          civil/mercantil sin subordinación, no un contrato laboral; confirma con un abogado si tienes dudas sobre cuál
+          aplica a un caso real. Por eso la casilla "Acumula..." salta a apagada para ese tipo, pero sigue siendo tuya:
+          actívala a mano si, en la práctica, sí le reconoces aguinaldo/vacaciones/antigüedad a ese colaborador. Por
+          defecto se le retiene un 10% fijo (Art. 44 Reglamento Ley 822), salvo que el negocio esté registrado como
+          <strong> Cuota Fija</strong>, caso en el que no se retiene nada — el Art. 259 de la Ley 822 exonera a estos
+          negocios de hacer retenciones de IR (ver Régimen fiscal en el panel de proveedor).
         </p>
       </section>
 
@@ -103,7 +92,8 @@ export default async function ColaboradoresPage() {
                   <div className="text-xs text-inkfaint">
                     {e.role} {e.externalCode && `· ${e.externalCode}`} {e.cedula && `· ${e.cedula}`} {e.cuentaBancaria && `· Cta. ${e.cuentaBancaria}`}
                     {d.esServiciosProfesionales && <span className="text-gold"> · Servicios profesionales</span>}
-                    {!d.esServiciosProfesionales && !e.acumulaPrestaciones && <span className="text-lava"> · No acumula prestaciones</span>}
+                    {!e.acumulaPrestaciones && <span className="text-lava"> · No acumula prestaciones</span>}
+                    {d.esServiciosProfesionales && e.acumulaPrestaciones && <span className="text-emerald"> · Sí acumula prestaciones</span>}
                   </div>
                 </td>
                 <td className="py-3 text-right font-mono">{money(d.bruto)}</td>

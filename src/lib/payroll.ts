@@ -243,8 +243,18 @@ export interface DesglosePeriodo {
  * completo. Un contador debe confirmar si esto es aceptable antes de usarlo
  * con clientes reales.
  */
+export type PeriodicidadKey = "MENSUAL" | "QUINCENAL";
+
 export function calcularPeriodo(params: {
+  // SIEMPRE el salario mensual de referencia, sin importar `periodicidad` —
+  // nunca lo dividas tú mismo antes de llamar esta función. Si
+  // `periodicidad` es QUINCENAL, esta función prorratea internamente la
+  // base salarial y las provisiones (ver más abajo); el valor de la hora
+  // extra también sigue derivándose de este salario mensual completo
+  // (Art. 62/65 CT: salario/30/8), no del monto ya prorrateado.
   bruto: number;
+  // Monto YA correspondiente a este período específico (no mensual) — así
+  // ya lo pide la plantilla de Excel para estas columnas.
   horasExtraCantidad?: number;
   comisiones?: number;
   retroactivos?: number;
@@ -252,25 +262,40 @@ export function calcularPeriodo(params: {
   antiguedadMeses?: number;
   otrasDeducciones?: number;
   otrasDeduccionesConcepto?: string | null;
+  // MENSUAL (por defecto, sin cambios de comportamiento) o QUINCENAL. En
+  // QUINCENAL, la base salarial y las provisiones de este período se
+  // prorratean a la mitad, y el IR se proyecta sobre 24 quincenas al año en
+  // vez de 12 meses — así el salario mensual de referencia nunca cambia en
+  // Colaboradores/Excel, y no hay que calcular la mitad a mano.
+  periodicidad?: PeriodicidadKey;
   // Negocio en régimen Cuota Fija — ver comentario de calcularIR() arriba.
   // También exonera la retención fija de servicios profesionales (ver más
-  // abajo) — el Art. 44 del Reglamento de la Ley 822 liga esa retención a
-  // los "contribuyentes del régimen general", y el Art. 57.5 exige que la
-  // Administración Tributaria nombre y notifique a una persona natural como
-  // agente retenedor, cosa que no aplica a un negocio en Cuota Fija.
+  // abajo). Base legal verificada: Art. 259 de la Ley 822 (LCT, dentro del
+  // capítulo del Régimen Simplificado de Cuota Fija) establece expresamente
+  // que estos contribuyentes "no están obligados a realizar anticipos ni
+  // retenciones a cuenta del Impuesto sobre la Renta (IR)". Como respaldo
+  // adicional: el Art. 44 del Reglamento de la Ley 822 (Decreto 01-2013)
+  // liga la obligación general de retener a los "contribuyentes del régimen
+  // general" — un negocio en Cuota Fija no lo es — y su numeral 2.5, inciso
+  // a) es la norma que fija el 10% para servicios profesionales de persona
+  // natural residente quien SÍ debe retener.
   exentoIR?: boolean;
   // LABORAL (por defecto) o SERVICIOS_PROFESIONALES — ver TipoContrato en
-  // schema.prisma. SERVICIOS_PROFESIONALES ignora acumulaPrestaciones y la
-  // tabla progresiva: retiene el 10% fijo sobre todo lo pagado, sin INSS, sin
-  // provisiones — salvo que exentoIR sea true (Cuota Fija), caso en el que no
-  // retiene nada, igual que ya ocurre con el IR laboral.
+  // schema.prisma. SERVICIOS_PROFESIONALES ignora la tabla progresiva:
+  // retiene el 10% fijo sobre todo lo pagado, sin INSS — salvo que exentoIR
+  // sea true (Cuota Fija), caso en el que no retiene nada, igual que ya
+  // ocurre con el IR laboral.
   tipoContrato?: TipoContratoKey;
-  // Si acumula aguinaldo/vacaciones/indemnización este período. Por defecto
-  // true para LABORAL (lo que corresponde por ley); se ignora por completo
-  // para SERVICIOS_PROFESIONALES, que nunca acumula.
+  // Si acumula aguinaldo/vacaciones/indemnización este período — decisión
+  // del negocio por colaborador (Employee.acumulaPrestaciones),
+  // INDEPENDIENTE del tipo de contrato. Por defecto true para LABORAL (lo
+  // que corresponde por ley) y false para SERVICIOS_PROFESIONALES (no es un
+  // derecho de esa relación civil/mercantil) — pero un negocio puede
+  // activarlo a mano para un colaborador de servicios profesionales al que,
+  // en la práctica, sí le reconoce esas prestaciones.
   acumulaPrestaciones?: boolean;
 }): DesglosePeriodo {
-  const bruto = params.bruto;
+  const salarioMensualReferencia = params.bruto;
   const horasExtraCantidad = params.horasExtraCantidad || 0;
   const comisiones = params.comisiones || 0;
   const retroactivos = params.retroactivos || 0;
@@ -280,10 +305,26 @@ export function calcularPeriodo(params: {
   const otrasDeduccionesConcepto = otrasDeducciones > 0 ? (params.otrasDeduccionesConcepto || null) : null;
   const exentoIR = params.exentoIR || false;
   const esServiciosProfesionales = params.tipoContrato === "SERVICIOS_PROFESIONALES";
-  const acumulaPrestaciones = esServiciosProfesionales ? false : (params.acumulaPrestaciones ?? true);
+  const acumulaPrestaciones = params.acumulaPrestaciones ?? !esServiciosProfesionales;
+  const periodicidad = params.periodicidad ?? "MENSUAL";
+  const esQuincenal = periodicidad === "QUINCENAL";
+  // Días de referencia para prorratear provisiones con las mismas funciones
+  // *PorDias que ya usa src/lib/provisiones.ts para la liquidación — con 30
+  // días dan exactamente lo mismo que provisionAguinaldo()/Vacaciones()/
+  // Indemnizacion() de siempre (salarioMensual/360 × 30 = salarioMensual/12),
+  // así que MENSUAL queda bit a bit igual que antes de este cambio.
+  const diasDelPeriodo = esQuincenal ? 15 : 30;
+  // Solo la BASE salarial se prorratea — horas extra, comisiones,
+  // retroactivos, viáticos y otras deducciones ya vienen como montos de ESTE
+  // período (así lo pide la plantilla de Excel), no se tocan.
+  const baseSalarialDelPeriodo = round2(salarioMensualReferencia * (esQuincenal ? 0.5 : 1));
+  // Cuántos de estos períodos hay en un año — para proyectar la expectativa
+  // anual de renta sobre la que se aplica la tarifa progresiva del Art. 23 (o
+  // el 10% fijo), igual que ya se hacía para un mes, pero generalizado.
+  const periodosPorAnio = esQuincenal ? 24 : 12;
 
-  const horasExtraMonto = calcularHorasExtra(bruto, horasExtraCantidad);
-  const totalGravable = round2(bruto + horasExtraMonto + comisiones + retroactivos);
+  const horasExtraMonto = calcularHorasExtra(salarioMensualReferencia, horasExtraCantidad);
+  const totalGravable = round2(baseSalarialDelPeriodo + horasExtraMonto + comisiones + retroactivos);
 
   let inssLaboral: number;
   let baseImponibleMensual: number;
@@ -298,31 +339,31 @@ export function calcularPeriodo(params: {
     // Art. 23 (esa tabla es solo para rentas del trabajo en relación de
     // dependencia). Ver RETENCION_SERVICIOS_PROFESIONALES arriba.
     //
-    // Si exentoIR (Cuota Fija) está activo, tampoco se retiene esto: un
-    // negocio en Cuota Fija no es "contribuyente del régimen general" (Art.
-    // 44 Reglamento Ley 822) ni ha sido nombrado agente retenedor por la
-    // Administración Tributaria (Art. 57.5), así que no le corresponde
-    // actuar como agente de retención sobre lo que paga a terceros.
+    // Si exentoIR (Cuota Fija) está activo, tampoco se retiene esto — ver la
+    // base legal verificada (Art. 259 LCT) en el comentario de `exentoIR`
+    // más arriba.
     inssLaboral = 0;
     baseImponibleMensual = totalGravable;
     expectativaAnual = 0;
     tramo = { hasta: Infinity, base: 0, tasa: exentoIR ? 0 : RETENCION_SERVICIOS_PROFESIONALES, exceso: 0 };
     irMensual = exentoIR ? 0 : round2(totalGravable * RETENCION_SERVICIOS_PROFESIONALES);
-    irAnual = round2(irMensual * 12);
+    irAnual = round2(irMensual * periodosPorAnio);
   } else {
     inssLaboral = round2(totalGravable * INSS_LABORAL);
     baseImponibleMensual = round2(totalGravable - inssLaboral);
-    expectativaAnual = round2(baseImponibleMensual * 12);
+    expectativaAnual = round2(baseImponibleMensual * periodosPorAnio);
     tramo = TABLA_IR.find((t) => expectativaAnual <= t.hasta)!;
     irAnual = exentoIR
       ? 0
       : round2(Math.max(tramo.base + (expectativaAnual - tramo.exceso) * tramo.tasa, 0));
-    irMensual = exentoIR ? 0 : round2(irAnual / 12);
+    irMensual = exentoIR ? 0 : round2(irAnual / periodosPorAnio);
   }
 
-  const provAguinaldo = acumulaPrestaciones ? provisionAguinaldo(bruto) : 0;
-  const provVacaciones = acumulaPrestaciones ? provisionVacaciones(bruto) : 0;
-  const provIndemnizacion = acumulaPrestaciones ? provisionIndemnizacion(bruto, antiguedadMeses) : 0;
+  const provAguinaldo = acumulaPrestaciones ? provisionAguinaldoPorDias(salarioMensualReferencia, diasDelPeriodo) : 0;
+  const provVacaciones = acumulaPrestaciones ? provisionVacacionesPorDias(salarioMensualReferencia, diasDelPeriodo) : 0;
+  const provIndemnizacion = acumulaPrestaciones
+    ? provisionIndemnizacionPorDias(salarioMensualReferencia, antiguedadMeses, diasDelPeriodo)
+    : 0;
 
   const totalDevengado = round2(totalGravable + viaticos);
   // Otras deducciones (no son de ley: error de pago, faltas, llegadas tardías,
@@ -331,7 +372,10 @@ export function calcularPeriodo(params: {
   const netoPagar = round2(totalDevengado - inssLaboral - irMensual - otrasDeducciones);
 
   return {
-    bruto,
+    // La base salarial REAL de este período (ya prorrateada si es
+    // QUINCENAL) — lo que efectivamente se le paga y se guarda en el
+    // comprobante, no el salario mensual de referencia sin tocar.
+    bruto: baseSalarialDelPeriodo,
     horasExtraCantidad,
     horasExtraMonto,
     comisiones,

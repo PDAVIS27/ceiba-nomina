@@ -39,7 +39,11 @@ export default async function NominaPage({
         <p className="text-inkdim text-sm mb-4">
           Sube el archivo con código, nombre, cédula, cuenta bancaria, departamento, salario, horas extra,
           viáticos, retroactivos y otras deducciones — crea a quien no exista, actualiza a quien ya exista, y
-          genera la preplanilla de una sola vez.
+          genera la preplanilla de una sola vez. La columna "Salario mensual" <strong>siempre</strong> es el salario
+          mensual completo de referencia, nunca lo dividas tú mismo: si este período es una quincena, elige
+          "Quincenal" abajo y Ceiba calcula sola la mitad del salario, el INSS, el IR y las provisiones que
+          corresponden — horas extra, comisiones, viáticos, retroactivos y otras deducciones sí van tal cual el
+          monto de este período, como ya lo pide la plantilla.
         </p>
         <div className="flex flex-wrap gap-3 items-end mb-3">
           <a
@@ -53,6 +57,7 @@ export default async function NominaPage({
           <Field name="label" label="Nombre del período" placeholder="16–31 jul 2026" />
           <FechaField name="periodStart" label="Fecha de inicio" />
           <FechaField name="periodEnd" label="Fecha de fin" />
+          <PeriodicidadField />
           <div>
             <label className="block text-xs text-inkdim mb-1.5">Archivo (.xlsx)</label>
             <input
@@ -81,7 +86,13 @@ export default async function NominaPage({
             <Field name="label" label="Nombre del período" placeholder="16–31 jul 2026" />
             <FechaField name="periodStart" label="Fecha de inicio" />
             <FechaField name="periodEnd" label="Fecha de fin" />
+            <PeriodicidadField />
           </div>
+          <p className="text-inkfaint text-xs mb-4 -mt-2">
+            El salario de cada colaborador (columna de Colaboradores) siempre es su salario mensual completo — si
+            eliges "Quincenal", Ceiba calcula sola la mitad del salario, el INSS, el IR y las provisiones de este
+            período.
+          </p>
 
           {employees.length > 0 && (
             <table className="w-full text-sm mb-5">
@@ -217,6 +228,23 @@ function FechaField({ name, label, defaultValue }: { name: string; label: string
       <label className="block text-xs text-inkdim mb-1.5">{label}</label>
       <input name={name} type="date" required defaultValue={defaultValue}
         className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
+    </div>
+  );
+}
+
+function PeriodicidadField() {
+  return (
+    <div>
+      <label className="block text-xs text-inkdim mb-1.5">Periodicidad</label>
+      <select
+        name="periodicidad"
+        defaultValue="MENSUAL"
+        title="El salario mensual de referencia nunca cambia — Quincenal solo le dice a Ceiba que prorratee la mitad al calcular"
+        className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm"
+      >
+        <option value="MENSUAL">Mensual</option>
+        <option value="QUINCENAL">Quincenal</option>
+      </select>
     </div>
   );
 }

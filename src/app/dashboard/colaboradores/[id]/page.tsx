@@ -6,6 +6,7 @@ import { mesesEntre } from "@/lib/dateUtils";
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
 import PagosPendientesFields from "@/components/PagosPendientesFields";
+import TipoContratoYPrestaciones from "@/components/TipoContratoYPrestaciones";
 import {
   pagarAguinaldo,
   registrarVacacionesTomadas,
@@ -96,36 +97,21 @@ export default async function ColaboradorDetallePage({
         <section className="bg-panel border border-line rounded-xl p-6 mb-8">
           <h3 className="font-serif text-lg font-semibold mb-1">Tipo de contrato</h3>
           <p className="text-inkdim text-sm mb-4">
-            Servicios profesionales no calcula INSS ni la tabla progresiva de IR — retiene un 10% fijo, y nunca
-            acumula aguinaldo, vacaciones ni antigüedad. Es una relación civil/mercantil, no laboral; confirma con
-            un abogado si hay duda sobre cuál corresponde a un caso real (el nombre que le des aquí no decide la
-            naturaleza legal de la relación si en la práctica hay subordinación).
+            Servicios profesionales no calcula INSS ni la tabla progresiva de IR — retiene un 10% fijo (salvo que el
+            negocio esté en Cuota Fija). Es una relación civil/mercantil, no laboral; confirma con un abogado si hay
+            duda sobre cuál corresponde a un caso real (el nombre que le des aquí no decide la naturaleza legal de la
+            relación si en la práctica hay subordinación). La acumulación de aguinaldo/vacaciones/antigüedad es un
+            control aparte, independiente del tipo de contrato: normalmente va apagada para servicios profesionales
+            (no es un derecho de esa relación), pero puedes activarla si, en la práctica, el negocio sí se la
+            reconoce a este colaborador.
           </p>
           <form action={actualizarTipoContrato} className="flex flex-wrap gap-3 items-end">
             <input type="hidden" name="employeeId" value={employee.id} />
-            <div>
-              <label className="block text-xs text-inkdim mb-1.5">Tipo de contrato</label>
-              <select
-                name="tipoContrato"
-                defaultValue={employee.tipoContrato}
-                id={`tipoContrato-${employee.id}`}
-                className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm w-72"
-              >
-                <option value="LABORAL">Laboral (planilla, con prestaciones)</option>
-                <option value="SERVICIOS_PROFESIONALES">Servicios profesionales (honorarios, 10% retención)</option>
-              </select>
-            </div>
-            <label className="flex items-center gap-2 text-xs text-inkdim pb-2.5">
-              <input
-                type="checkbox"
-                name="acumulaPrestaciones"
-                defaultChecked={employee.acumulaPrestaciones}
-                disabled={employee.tipoContrato === "SERVICIOS_PROFESIONALES"}
-                className="accent-emerald"
-              />
-              Acumula aguinaldo / vacaciones / antigüedad
-              {employee.tipoContrato === "SERVICIOS_PROFESIONALES" && " (no aplica)"}
-            </label>
+            <TipoContratoYPrestaciones
+              defaultTipoContrato={employee.tipoContrato}
+              defaultAcumulaPrestaciones={employee.acumulaPrestaciones}
+              idPrefix={employee.id}
+            />
             <SubmitButton className="px-4 py-2.5 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium" pendingText="Guardando…">
               Guardar
             </SubmitButton>
@@ -133,10 +119,17 @@ export default async function ColaboradorDetallePage({
         </section>
       )}
 
-      {employee.tipoContrato === "SERVICIOS_PROFESIONALES" && (
+      {employee.tipoContrato === "SERVICIOS_PROFESIONALES" && !employee.acumulaPrestaciones && (
         <div className="bg-panel/60 border border-line rounded-xl px-5 py-3 mb-4 text-xs text-inkdim">
-          Este colaborador es de <strong>servicios profesionales</strong> — no acumula aguinaldo, vacaciones ni
-          antigüedad, así que los saldos de abajo se mantienen en cero.
+          Este colaborador es de <strong>servicios profesionales</strong> y no tiene la acumulación activada — los
+          saldos de abajo se mantienen en cero.
+        </div>
+      )}
+      {employee.tipoContrato === "SERVICIOS_PROFESIONALES" && employee.acumulaPrestaciones && (
+        <div className="bg-emerald/10 border border-emerald/40 rounded-xl px-5 py-3 mb-4 text-xs text-inkdim">
+          Este colaborador es de <strong>servicios profesionales</strong>, pero tiene la acumulación de
+          aguinaldo/vacaciones/antigüedad <strong>activada manualmente</strong> — los saldos de abajo sí se van
+          llevando, aunque no se le calcule INSS ni la tabla progresiva de IR.
         </div>
       )}
       {employee.tipoContrato !== "SERVICIOS_PROFESIONALES" && !employee.acumulaPrestaciones && (

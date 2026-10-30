@@ -3,7 +3,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calcularPeriodo } from "@/lib/payroll";
+import { calcularPeriodo, type PeriodicidadKey } from "@/lib/payroll";
 import { esExentoIR } from "@/lib/regimenFiscal";
 import { parsearExcelColaboradores } from "@/lib/bulkImport";
 import {
@@ -21,6 +21,14 @@ import { mesesEntre } from "@/lib/dateUtils";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Lee la periodicidad del formulario de "Correr nómina" (mano o Excel) —
+ * MENSUAL por defecto si no viene nada, para no romper flujos existentes.
+ */
+function leerPeriodicidad(formData: FormData): PeriodicidadKey {
+  return String(formData.get("periodicidad") || "MENSUAL") === "QUINCENAL" ? "QUINCENAL" : "MENSUAL";
 }
 
 async function requireCompanyId(): Promise<string> {
@@ -64,9 +72,11 @@ export async function addEmployee(formData: FormData) {
   const startDate = startDateRaw ? new Date(startDateRaw) : new Date();
   const tipoContratoRaw = String(formData.get("tipoContrato") || "LABORAL");
   const tipoContrato = tipoContratoRaw === "SERVICIOS_PROFESIONALES" ? "SERVICIOS_PROFESIONALES" : "LABORAL";
-  // Un colaborador de servicios profesionales nunca acumula prestaciones —
-  // la casilla del formulario no aplica para él y se ignora.
-  const acumulaPrestaciones = tipoContrato === "SERVICIOS_PROFESIONALES" ? false : formData.get("acumulaPrestaciones") !== null;
+  // La casilla decide, sin importar el tipo de contrato — normalmente se
+  // deja sin marcar para servicios profesionales (no es un derecho de esa
+  // relación civil/mercantil), pero el negocio puede activarla a mano si en
+  // la práctica sí le reconoce prestaciones a ese colaborador.
+  const acumulaPrestaciones = formData.get("acumulaPrestaciones") !== null;
   if (!fullName || !role || grossSalary <= 0) return;
   await prisma.employee.create({
     data: {
@@ -97,7 +107,8 @@ export async function actualizarTipoContrato(formData: FormData) {
 
   const tipoContratoRaw = String(formData.get("tipoContrato") || "LABORAL");
   const tipoContrato = tipoContratoRaw === "SERVICIOS_PROFESIONALES" ? "SERVICIOS_PROFESIONALES" : "LABORAL";
-  const acumulaPrestaciones = tipoContrato === "SERVICIOS_PROFESIONALES" ? false : formData.get("acumulaPrestaciones") !== null;
+  // Independiente del tipo de contrato — ver nota en addEmployee arriba.
+  const acumulaPrestaciones = formData.get("acumulaPrestaciones") !== null;
 
   await prisma.employee.update({
     where: { id: employeeId },
@@ -148,6 +159,7 @@ export async function runPayroll(formData: FormData) {
 
   const label = String(formData.get("label") || "Período sin nombre").trim();
   const { periodStart, periodEnd } = leerFechasPeriodo(formData, "/dashboard/nomina");
+  const periodicidad = leerPeriodicidad(formData);
 
   const duplicado = await existeBorradorConEseNombre(companyId, label);
   if (duplicado) {
@@ -158,7 +170,7 @@ export async function runPayroll(formData: FormData) {
     );
   }
 
-  const period = await prisma.payrollPeriod.create({ data: { companyId, label, periodStart, periodEnd } });
+  const period = await prisma.payrollPeriod.create({ data: { companyId, label, periodStart, periodEnd, periodicidad } });
   const hoy = new Date();
 
   await prisma.payslip.createMany({
@@ -183,6 +195,7 @@ export async function runPayroll(formData: FormData) {
         exentoIR,
         tipoContrato: e.tipoContrato,
         acumulaPrestaciones: e.acumulaPrestaciones,
+        periodicidad,
       });
 
       return {
@@ -220,6 +233,7 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
     redirect(`/dashboard/nomina?error=${encodeURIComponent("No seleccionaste ningún archivo.")}`);
   }
   const { periodStart, periodEnd } = leerFechasPeriodo(formData, "/dashboard/nomina");
+  const periodicidad = leerPeriodicidad(formData);
 
   const duplicado = await existeBorradorConEseNombre(companyId, label);
   if (duplicado) {
@@ -299,7 +313,7 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
     (f as any)._acumulaPrestaciones = empleado.acumulaPrestaciones;
   }
 
-  const period = await prisma.payrollPeriod.create({ data: { companyId, label, periodStart, periodEnd } });
+  const period = await prisma.payrollPeriod.create({ data: { companyId, label, periodStart, periodEnd, periodicidad } });
 
   await prisma.payslip.createMany({
     data: (filas as any[]).map((f) => {
@@ -316,6 +330,7 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
         exentoIR,
         tipoContrato: f._tipoContrato,
         acumulaPrestaciones: f._acumulaPrestaciones,
+        periodicidad,
       });
       return {
         periodId: period.id,

@@ -205,15 +205,18 @@ editable después desde su página de detalle ("Tipo de contrato"):
   patronal) ni la tabla progresiva de IR — en su lugar retiene un **10% fijo**
   sobre todo lo pagado, que es la alícuota de retención en la fuente para
   servicios profesionales de una persona natural residente (Art. 44, numeral
-  2.5, inciso a, del Reglamento de la Ley 822) — **salvo que el negocio esté
-  registrado como Cuota Fija**, caso en el que esta retención tampoco se
-  calcula (ver la sección de régimen fiscal arriba). Tampoco acumula aguinaldo,
-  vacaciones ni indemnización — son derechos del Código del Trabajo que no
-  corresponden a quien presta un servicio de forma independiente. Esto se
-  refleja en preplanilla/planilla, el Inicio (el INSS patronal e INATEC ya no
-  cuentan el salario de estos colaboradores en su base), el simulador de IR,
-  los PDF (comprobante, preplanilla, planilla) y la liquidación si se le da de
-  baja.
+  2.5, inciso a, del Reglamento de la Ley 822, Decreto 01-2013) — **salvo que
+  el negocio esté registrado como Cuota Fija**, caso en el que esta retención
+  tampoco se calcula. **Base legal verificada de esa excepción:** el Art. 259
+  de la Ley 822 (dentro del capítulo del Régimen Simplificado de Cuota Fija)
+  establece expresamente que estos contribuyentes "no están obligados a
+  realizar anticipos ni retenciones a cuenta del Impuesto sobre la Renta
+  (IR)". Como respaldo adicional, la obligación general de actuar como agente
+  retenedor recae sobre los "contribuyentes del régimen general" (Art. 44 del
+  Reglamento) — un negocio en Cuota Fija no lo es. Esto se refleja en
+  preplanilla/planilla, el Inicio (el INSS patronal e INATEC ya no cuentan el
+  salario de estos colaboradores en su base), el simulador de IR, los PDF
+  (comprobante, preplanilla, planilla) y la liquidación si se le da de baja.
 
 **Advertencia (no es asesoría legal):** si en la práctica hay subordinación
 real con un colaborador marcado como servicios profesionales — horario fijo
@@ -221,27 +224,69 @@ impuesto por el negocio, exclusividad, supervisión directa, herramientas de
 trabajo que tú le das, etc. — la relación podría calificar como laboral para
 efectos legales sin importar cómo se le llame aquí ("simulación laboral").
 Verifícalo con un abogado laboral nicaragüense ante cualquier duda; también te
-recomiendo confirmar con un contador la tasa del 10% antes de usarla con
-clientes reales — las fuentes que revisé coinciden en ese porcentaje para una
-persona natural residente, pero no reemplazan una revisión profesional.
+recomiendo confirmar con un contador la tasa del 10% y la exención de Cuota
+Fija antes de usarlas con clientes reales — las fuentes que revisé (incluido
+el texto del Art. 259 LCT) coinciden con lo implementado aquí, pero no
+reemplazan una revisión profesional.
 
 ## Acumular o no prestaciones (aguinaldo / vacaciones / antigüedad)
 
-Además del tipo de contrato, cada colaborador **Laboral** tiene una casilla
-"Acumula aguinaldo / vacaciones / antigüedad" (activada por defecto, que es
-lo que corresponde por ley). Si la apagas para alguien, Ceiba deja de llevar
-la cuenta de esas tres provisiones para esa persona — en planilla, en su
-saldo acumulado y en su liquidación si se le da de baja. **Apagarla no quita
-el derecho de ley del colaborador** — Nicaragua no permite renunciar a eso por
-contrato en una relación laboral real — solo deja de calcularlo dentro de la
-plataforma, por ejemplo si el negocio ya las gestiona aparte y no quiere que
-se dupliquen aquí. Para colaboradores de **servicios profesionales** esta
-casilla no aplica: nunca acumulan, sin importar su valor guardado.
+Cada colaborador, **sea Laboral o Servicios profesionales**, tiene una
+casilla "Acumula aguinaldo / vacaciones / antigüedad" — es un control
+aparte, independiente del tipo de contrato. Al cambiar el tipo de contrato
+en el formulario, la casilla salta sola al valor típico de ese tipo
+(activada para Laboral, apagada para Servicios profesionales), pero sigue
+siendo tuya: puedes marcarla o desmarcarla a mano para cualquiera de los dos
+tipos.
+
+- Para un colaborador **Laboral**, lo normal es dejarla activada — es lo que
+  corresponde por ley. Si la apagas, Ceiba deja de llevar la cuenta de esas
+  tres provisiones para esa persona. **Apagarla no quita el derecho de ley
+  del colaborador** — Nicaragua no permite renunciar a eso por contrato en
+  una relación laboral real — solo deja de calcularlo dentro de la
+  plataforma, por ejemplo si el negocio ya las gestiona aparte y no quiere
+  que se dupliquen aquí.
+- Para un colaborador de **servicios profesionales**, lo normal es dejarla
+  apagada — no es un derecho de esa relación civil/mercantil. Pero si en la
+  práctica el negocio sí le reconoce aguinaldo/vacaciones/antigüedad a ese
+  colaborador (por ejemplo, alguien que funcionalmente trabaja como empleado
+  pero se le paga por honorarios porque el negocio no está inscrito en el
+  INSS), puedes activarla a mano — Ceiba lleva la cuenta igual que para un
+  colaborador Laboral, sin que eso cambie el cálculo de INSS/IR de ese tipo
+  de contrato.
 
 La carga masiva por Excel no trae estas dos opciones todavía (siempre crea
 colaboradores nuevos como Laboral, acumulando) — para un colaborador que ya
 exista, respeta lo que tenga configurado. Si quieres que la plantilla de
 Excel también traiga el tipo de contrato, dime y se lo agrego.
+
+## Periodicidad: Mensual o Quincenal
+
+Al correr nómina (a mano o por Excel) eliges la **periodicidad** del
+período: Mensual (de siempre) o Quincenal. El salario que tienes guardado en
+Colaboradores — o el que pongas en la columna "Salario mensual (C$)" del
+Excel — **siempre es el salario mensual completo de referencia, nunca lo
+dividas tú mismo**. Si eliges Quincenal, Ceiba:
+
+- Paga la mitad de ese salario de referencia en este período.
+- Calcula el INSS laboral sobre esa mitad.
+- Proyecta el IR sobre 24 quincenas al año en vez de 12 meses (en vez de
+  dividir entre 12, divide entre 24) — así la tabla progresiva del Art. 23
+  sigue aplicándose correctamente sobre el verdadero ingreso anual del
+  colaborador, no sobre el doble.
+- Acumula la mitad de aguinaldo/vacaciones/antigüedad de ese período (para
+  que sumando las dos quincenas de un mes te dé la misma provisión mensual
+  de siempre).
+
+Horas extra, comisiones, retroactivos, viáticos y otras deducciones **no se
+tocan** — esos campos ya se piden como el monto de ese período específico,
+no un monto mensual, así que se usan tal cual los escribas. La hora extra
+también se sigue calculando con el salario mensual completo (salario/30/8,
+Art. 62/65 CT), sin importar la periodicidad — es la tarifa legal de la
+hora, no cambia por cuántas veces al mes pagues.
+
+Mensual sigue siendo el valor por defecto en ambos formularios, y su cálculo
+no cambió en nada con esta función.
 
 ---
 

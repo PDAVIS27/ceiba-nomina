@@ -20,7 +20,7 @@ export async function GET() {
     ["N° de cédula", "Opcional. Número de cédula de identidad del colaborador."],
     ["Cuenta bancaria", "Opcional. Número de cuenta bancaria donde se le deposita el pago."],
     ["Departamento", "Área, puesto o departamento del colaborador."],
-    ["Salario mensual (C$)", "Salario bruto mensual de referencia (sin horas extra ni comisiones)."],
+    ["Salario mensual (C$)", "Salario bruto MENSUAL de referencia (sin horas extra ni comisiones) — siempre completo, nunca lo dividas aunque este período sea una quincena: elige \"Quincenal\" en Correr nómina y Ceiba calcula sola la mitad."],
     ["Horas extras", "Cantidad de horas extra de este período (recargo del 100% según el Código del Trabajo)."],
     ["Comisiones (C$)", "Monto de comisión del período (ej. sobre ventas) — se suma a la base gravable, igual que retroactivos."],
     ["Viáticos (C$)", "Monto de viáticos del período — no gravable."],
