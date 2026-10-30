@@ -121,10 +121,14 @@ export default async function AprobarPorCorreoPage({ params }: { params: { token
             </div>
 
             <a
-              href={`/api/aprobar/${params.token}/pdf`}
+              href={
+                period.status === "APROBADA"
+                  ? `/api/aprobar/${params.token}/listado-pago`
+                  : `/api/aprobar/${params.token}/pdf`
+              }
               className="block text-center w-full border border-linestrong rounded-lg py-2.5 mb-6 text-sm text-inkdim hover:border-gold hover:text-gold transition"
             >
-              Descargar PDF con el detalle completo
+              {period.status === "APROBADA" ? "Descargar listado de pago (PDF)" : "Descargar PDF con el detalle completo"}
             </a>
 
             {period.status === "APROBADA" ? (
