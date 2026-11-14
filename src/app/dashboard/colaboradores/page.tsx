@@ -45,6 +45,7 @@ export default async function ColaboradoresPage() {
       tipoContrato: e.tipoContrato,
       acumulaPrestaciones: e.acumulaPrestaciones,
       moneda: e.moneda === "USD" ? "USD" : "NIO",
+      periodicidad: e.periodicidad === "QUINCENAL" ? "QUINCENAL" : e.periodicidad === "SEMANAL" ? "SEMANAL" : "MENSUAL",
     }),
   }));
 
@@ -66,6 +67,14 @@ export default async function ColaboradoresPage() {
               <option value="USD">Dólares (US$)</option>
             </select>
           </div>
+          <div>
+            <label className="block text-xs text-inkdim mb-1.5">Periodicidad habitual</label>
+            <select name="periodicidad" defaultValue="MENSUAL" className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
+              <option value="MENSUAL">Mensual</option>
+              <option value="QUINCENAL">Quincenal</option>
+              <option value="SEMANAL">Semanal</option>
+            </select>
+          </div>
           <Field name="grossSalary" label="Salario bruto" type="number" placeholder="9200" />
           <Field name="startDate" label="Fecha de ingreso" type="date" />
           <TipoContratoYPrestaciones defaultTipoContrato="LABORAL" defaultAcumulaPrestaciones={true} />
@@ -85,7 +94,10 @@ export default async function ColaboradoresPage() {
           en <strong>dólares</strong>, el INSS y el IR se calculan igual pero convertidos a córdobas con el tipo de
           cambio que indiques al correr su planilla (la tabla de IR usa tramos en córdobas) — por eso la columna de IR
           y Neto de abajo muestra "—" para un colaborador en USD: es solo de referencia, el cálculo real sale al
-          correr nómina.
+          correr nómina. La <strong>periodicidad habitual</strong> es con qué frecuencia se le paga normalmente — en
+          "Correr nómina" cada colaborador trae su propia fila con esta periodicidad ya marcada, así puedes incluir en
+          la MISMA corrida a alguien semanal junto con el resto que es quincenal o mensual, sin tener que separar la
+          planilla.
         </p>
       </section>
 
@@ -110,6 +122,11 @@ export default async function ColaboradoresPage() {
                   <div className="font-medium">
                     {e.fullName}
                     {e.moneda === "USD" && <span className="text-gold text-[10px] font-mono ml-1.5">USD</span>}
+                    {e.periodicidad !== "MENSUAL" && (
+                      <span className="text-inkdim text-[10px] font-mono ml-1.5 border border-linestrong rounded px-1 py-0.5">
+                        {e.periodicidad === "SEMANAL" ? "SEMANAL" : "QUINCENAL"}
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-inkfaint">
                     {e.role} {e.externalCode && `· ${e.externalCode}`} {e.cedula && `· ${e.cedula}`} {e.cuentaBancaria && `· Cta. ${e.cuentaBancaria}`}

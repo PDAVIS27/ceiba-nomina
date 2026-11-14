@@ -42,11 +42,12 @@ export default async function NominaPage({
           Sube el archivo con código, nombre, cédula, cuenta bancaria, departamento, salario, horas extra,
           viáticos, retroactivos y otras deducciones — crea a quien no exista, actualiza a quien ya exista, y
           genera la preplanilla de una sola vez. La columna "Salario mensual" <strong>siempre</strong> es el salario
-          mensual completo de referencia, nunca lo dividas tú mismo: si este período es una quincena o una semana,
-          elige "Quincenal" o "Semanal" abajo y Ceiba calcula sola la parte del salario, el INSS, el IR y las
-          provisiones que corresponden — horas extra, comisiones, viáticos, retroactivos y otras deducciones sí van
-          tal cual el monto de este período, como ya lo pide la plantilla. El archivo no tiene columna de moneda —
-          cada colaborador se interpreta con la moneda que ya tenga configurada en <a href="/dashboard/colaboradores" className="text-gold">Colaboradores</a>.
+          mensual completo de referencia, nunca lo dividas tú mismo. El archivo no tiene columna de periodicidad ni
+          de moneda — cada colaborador se calcula con la periodicidad y la moneda que ya tenga configurada en{" "}
+          <a href="/dashboard/colaboradores" className="text-gold">Colaboradores</a> (Mensual por defecto si es
+          nuevo). Para subir a alguien quincenal o semanal, configúralo primero ahí y luego cárgalo con esta
+          plantilla como siempre — puedes mezclar en el mismo archivo a colaboradores con distinta periodicidad,
+          cada quien se calcula con la suya.
         </p>
         <div className="flex flex-wrap gap-3 items-end mb-3">
           <a
@@ -60,7 +61,6 @@ export default async function NominaPage({
           <Field name="label" label="Nombre del período" placeholder="16–31 jul 2026" />
           <FechaField name="periodStart" label="Fecha de inicio" />
           <FechaField name="periodEnd" label="Fecha de fin" />
-          <PeriodicidadField />
           {hayUsd && <TipoCambioField />}
           <div>
             <label className="block text-xs text-inkdim mb-1.5">Archivo (.xlsx)</label>
@@ -89,22 +89,23 @@ export default async function NominaPage({
           importante: es lo que usa la plataforma para saber hasta qué día quedó cubierto cada colaborador en
           el histórico de provisiones (ver su detalle en Colaboradores). La columna "Otras deducciones" es para
           un descuento que decides tú y no es de ley (error de pago, falta, llegada tardía, etc.) — se resta
-          del neto sin afectar el INSS ni el IR. ¿Tienes un colaborador que se paga aparte (ej. semanal, mientras
-          los demás son mensuales)? Desmarca "Incluir" en los demás y corre esta planilla solo para él — luego
-          corre otra para el resto, con su propia periodicidad.
+          del neto sin afectar el INSS ni el IR. Cada colaborador trae su propia <strong>periodicidad</strong> ya
+          marcada según lo que tiene configurado en Colaboradores — así puedes correr a todos juntos en una sola
+          planilla aunque uno cobre semanal y el resto quincenal o mensual, cada quien se calcula con la suya, sin
+          que tengas que separar nada. Cámbiala en una fila si para esta corrida en particular necesitas algo
+          distinto. La casilla "Incluir" sigue sirviendo para lo de siempre: dejar fuera de esta corrida a quien no
+          corresponda pagar todavía.
         </p>
         <form action={runPayroll}>
           <div className="mb-4 flex flex-wrap gap-3 items-end">
             <Field name="label" label="Nombre del período" placeholder="16–31 jul 2026" />
             <FechaField name="periodStart" label="Fecha de inicio" />
             <FechaField name="periodEnd" label="Fecha de fin" />
-            <PeriodicidadField />
             {hayUsd && <TipoCambioField />}
           </div>
           <p className="text-inkfaint text-xs mb-4 -mt-2">
-            El salario de cada colaborador (columna de Colaboradores) siempre es su salario mensual completo — si
-            eliges "Quincenal" o "Semanal", Ceiba calcula sola la parte del salario, el INSS, el IR y las provisiones
-            de este período.
+            El salario de cada colaborador (columna de Colaboradores) siempre es su salario mensual completo — Ceiba
+            calcula sola la parte que corresponde según la periodicidad de cada fila.
             {hayUsd && " Si incluyes a algún colaborador en dólares, el tipo de cambio de arriba es obligatorio."}
           </p>
 
@@ -114,6 +115,7 @@ export default async function NominaPage({
                 <tr className="text-inkfaint text-xs uppercase font-mono text-left border-b border-linestrong">
                   <th className="pb-2">Incluir</th>
                   <th className="pb-2">Colaborador</th>
+                  <th className="pb-2">Periodicidad</th>
                   <th className="pb-2 text-right">Horas extra</th>
                   <th className="pb-2 text-right">Comisiones</th>
                   <th className="pb-2 text-right">Retroactivos</th>
@@ -136,6 +138,17 @@ export default async function NominaPage({
                       {e.moneda === "USD" && (
                         <span className="text-gold text-[10px] font-mono ml-1.5">USD</span>
                       )}
+                    </td>
+                    <td className="py-2.5">
+                      <select
+                        name={`periodicidad_${e.id}`}
+                        defaultValue={e.periodicidad}
+                        className="bg-[#12181a] border border-linestrong rounded-lg px-2.5 py-1.5 text-sm"
+                      >
+                        <option value="MENSUAL">Mensual</option>
+                        <option value="QUINCENAL">Quincenal</option>
+                        <option value="SEMANAL">Semanal</option>
+                      </select>
                     </td>
                     <td className="py-2.5 text-right">
                       <input name={`horas_${e.id}`} type="number" min="0" step="0.5" defaultValue="0"
@@ -252,24 +265,6 @@ function FechaField({ name, label, defaultValue }: { name: string; label: string
       <label className="block text-xs text-inkdim mb-1.5">{label}</label>
       <input name={name} type="date" required defaultValue={defaultValue}
         className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
-    </div>
-  );
-}
-
-function PeriodicidadField() {
-  return (
-    <div>
-      <label className="block text-xs text-inkdim mb-1.5">Periodicidad</label>
-      <select
-        name="periodicidad"
-        defaultValue="MENSUAL"
-        title="El salario mensual de referencia nunca cambia — Quincenal solo le dice a Ceiba que prorratee la mitad al calcular"
-        className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm"
-      >
-        <option value="MENSUAL">Mensual</option>
-        <option value="QUINCENAL">Quincenal</option>
-        <option value="SEMANAL">Semanal</option>
-      </select>
     </div>
   );
 }

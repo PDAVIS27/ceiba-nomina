@@ -289,18 +289,34 @@ hora, no cambia por cuántas veces al mes pagues.
 Mensual sigue siendo el valor por defecto en ambos formularios, y su cálculo
 no cambió en nada con esta función.
 
-### Correr una planilla separada para solo algunos colaboradores
+### Periodicidad por colaborador: correr junto a uno que cobra distinto
 
-En "Generar preplanilla a mano", cada fila de la tabla trae una casilla
-**"Incluir"** marcada por defecto. Esto te deja correr una planilla
-**aparte** para un colaborador con una periodicidad distinta al resto (por
-ejemplo, uno que se paga semanal mientras los demás son mensuales): desmarca
-a todos los demás, corre esa planilla solo para él con "Semanal", y luego
-corre otra planilla normal para el resto con "Mensual" o "Quincenal". Nada
-te obliga a hacerlo así — puedes dejarlos a todos marcados, como siempre,
-para correr una sola planilla conjunta. Esta casilla solo existe en el
-formulario a mano; la carga por Excel siempre incluye a todos los que vengan
-en el archivo.
+La periodicidad es un dato de **cada colaborador** (Colaboradores → "Moneda
+y periodicidad"), no de la planilla completa. Al agregarlo, o después desde
+su detalle, le indicas su periodicidad habitual: Mensual, Quincenal o
+Semanal — con qué frecuencia se le paga normalmente.
+
+Al "Generar preplanilla a mano", cada fila de la tabla trae su propia
+periodicidad **ya marcada** según lo que ese colaborador tiene configurado,
+con un select por si para esa corrida en particular necesitas algo
+distinto. Esto significa que puedes correr a **todos juntos en una sola
+planilla**, aunque uno cobre semanal y el resto quincenal o mensual: cada
+quien se calcula con la suya, sin que tengas que separar nada. La carga por
+Excel funciona igual — cada colaborador del archivo se calcula con su
+propia periodicidad guardada (no hay columna de periodicidad en la
+plantilla).
+
+Cada colaborador que incluyas sigue trayendo también su casilla
+**"Incluir"** (marcada por defecto) en el formulario a mano — eso es algo
+aparte: sirve para dejar fuera de ESTA corrida puntual a alguien que no
+corresponde pagar todavía (por ejemplo, ya se le pagó por separado antes,
+o está de permiso), sin tocar su periodicidad habitual.
+
+Cuando una misma planilla termina con colaboradores de distinta
+periodicidad, el encabezado del período en Históricos muestra "periodicidad
+mixta" en vez de una sola, y cada comprobante trae su propia etiqueta
+(Quincenal/Semanal) junto a su nombre para que quede claro cómo se calculó
+cada quien.
 
 ---
 

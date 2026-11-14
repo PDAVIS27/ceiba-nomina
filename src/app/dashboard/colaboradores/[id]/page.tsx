@@ -124,12 +124,15 @@ export default async function ColaboradorDetallePage({
 
       {employee.active && (
         <section className="bg-panel border border-line rounded-xl p-6 mb-8">
-          <h3 className="font-serif text-lg font-semibold mb-1">Moneda</h3>
+          <h3 className="font-serif text-lg font-semibold mb-1">Moneda y periodicidad</h3>
           <p className="text-inkdim text-sm mb-4">
-            En qué moneda está su salario. El INSS (7% fijo) y la retención de servicios profesionales (10% fijo) se
-            calculan igual en cualquier moneda, pero el IR usa una tabla con tramos en córdobas — para un colaborador
-            en <strong>dólares</strong>, Ceiba te va a pedir el tipo de cambio del día cada vez que corras su
-            planilla o calcules su liquidación, solo para ubicar el tramo correcto.
+            En qué moneda está su salario, y con qué frecuencia se le paga habitualmente. El INSS (7% fijo) y la
+            retención de servicios profesionales (10% fijo) se calculan igual en cualquier moneda, pero el IR usa una
+            tabla con tramos en córdobas — para un colaborador en <strong>dólares</strong>, Ceiba te va a pedir el
+            tipo de cambio del día cada vez que corras su planilla o calcules su liquidación, solo para ubicar el
+            tramo correcto. La <strong>periodicidad</strong> queda pre-marcada en su fila cada vez que corras nómina
+            a mano — así se puede incluir en la misma corrida junto con colaboradores que cobran distinto (ej. él
+            semanal, los demás quincenales), sin tener que separar la planilla.
           </p>
           <form action={actualizarMoneda} className="flex flex-wrap gap-3 items-end">
             <input type="hidden" name="employeeId" value={employee.id} />
@@ -138,6 +141,14 @@ export default async function ColaboradorDetallePage({
               <select name="moneda" defaultValue={employee.moneda} className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
                 <option value="NIO">Córdobas (C$)</option>
                 <option value="USD">Dólares (US$)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-inkdim mb-1.5">Periodicidad habitual</label>
+              <select name="periodicidad" defaultValue={employee.periodicidad} className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
+                <option value="MENSUAL">Mensual</option>
+                <option value="QUINCENAL">Quincenal</option>
+                <option value="SEMANAL">Semanal</option>
               </select>
             </div>
             <SubmitButton className="px-4 py-2.5 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium" pendingText="Guardando…">

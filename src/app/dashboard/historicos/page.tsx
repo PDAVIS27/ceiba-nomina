@@ -23,6 +23,24 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
+// Etiqueta para el resumen del período (PayrollPeriod.periodicidad) — MENSUAL
+// no se muestra (es el caso de siempre, sin aclaración). "MIXTA" significa
+// que se corrieron juntos colaboradores con distinta periodicidad habitual
+// en la misma planilla (ver Employee.periodicidad en schema.prisma) — cada
+// Payslip individual trae la suya propia (ver el detalle de cada uno abajo).
+const PERIODICIDAD_PERIODO_LABELS: Record<string, string> = {
+  QUINCENAL: "Quincenal",
+  SEMANAL: "Semanal",
+  MIXTA: "periodicidad mixta",
+};
+
+// Etiqueta corta para el tag junto al nombre de cada colaborador en la lista
+// de comprobantes — solo cuando no es Mensual (el caso de siempre).
+const PERIODICIDAD_PAYSLIP_LABELS: Record<string, string> = {
+  QUINCENAL: "QUINCENAL",
+  SEMANAL: "SEMANAL",
+};
+
 export default async function HistoricosPage({
   searchParams,
 }: {
@@ -317,7 +335,7 @@ export default async function HistoricosPage({
               <div className="text-xs text-inkfaint font-mono">
                 {selectedPeriod.tipo === "AGUINALDO" && <span className="text-gold">🎁 AGUINALDO · </span>}
                 {selectedPeriod.label}
-                {selectedPeriod.periodicidad === "QUINCENAL" && " · Quincenal"} ·{" "}
+                {PERIODICIDAD_PERIODO_LABELS[selectedPeriod.periodicidad] && ` · ${PERIODICIDAD_PERIODO_LABELS[selectedPeriod.periodicidad]}`} ·{" "}
                 {selectedPeriod.payslips.length} comprobantes ·{" "}
                 <span className={selectedPeriod.status === "BORRADOR" ? "text-gold" : "text-emerald"}>
                   {selectedPeriod.status === "BORRADOR" ? "BORRADOR — pendiente de aprobación" : "APROBADA"}
@@ -419,6 +437,11 @@ export default async function HistoricosPage({
                         <div className="font-medium">
                           {ps.employee.fullName}
                           {ps.moneda === "USD" && <span className="text-gold text-[10px] font-mono ml-1.5">USD</span>}
+                          {PERIODICIDAD_PAYSLIP_LABELS[ps.periodicidad] && (
+                            <span className="text-inkdim text-[10px] font-mono ml-1.5 border border-linestrong rounded px-1 py-0.5">
+                              {PERIODICIDAD_PAYSLIP_LABELS[ps.periodicidad]}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-inkfaint">{ps.employee.role}</div>
                       </div>

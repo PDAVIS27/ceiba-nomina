@@ -146,6 +146,20 @@ model Employee {
   // dólares para que el neto a pagar quede en la misma moneda del salario.
   moneda String @default("NIO")
 
+  // MENSUAL (por defecto) | QUINCENAL | SEMANAL — con qué frecuencia se le
+  // paga HABITUALMENTE a este colaborador. Se usa como valor por defecto
+  // cada vez que se corre su planilla: en el formulario a mano (Correr
+  // nómina) cada colaborador trae su propia fila con esta periodicidad ya
+  // marcada (anulable solo para esa corrida si hace falta); en la carga por
+  // Excel se usa tal cual, sin anularse (no hay columna de periodicidad en
+  // la plantilla — igual que `moneda`). Así un colaborador que cobra
+  // distinto al resto del negocio (ej. semanal mientras los demás son
+  // quincenales) se puede incluir en la MISMA corrida que todos los demás:
+  // cada quien se calcula con SU PROPIA periodicidad, sin tener que separar
+  // la planilla en varias corridas. Ver calcularPeriodo() en
+  // src/lib/payroll.ts y PayrollPeriod.periodicidad más abajo.
+  periodicidad String @default("MENSUAL")
+
   // Si este colaborador acumula aguinaldo/vacaciones/indemnización dentro de
   // Ceiba. Para SERVICIOS_PROFESIONALES este campo se ignora: NUNCA acumula,
   // sin importar lo que tenga guardado (ver calcularPeriodo en payroll.ts).
@@ -174,13 +188,22 @@ model PayrollPeriod {
   label      String
   status     String     @default("BORRADOR") // BORRADOR (pendiente de aprobación) | APROBADA (final)
   tipo       TipoPeriodo @default(NOMINA)
-  // MENSUAL (por defecto) | QUINCENAL | SEMANAL — ver calcularPeriodo() en
+  // MENSUAL | QUINCENAL | SEMANAL | MIXTA — ver calcularPeriodo() en
   // src/lib/payroll.ts. "Salario mensual" en Colaboradores/Excel SIEMPRE es
-  // el salario de referencia completo; cuando el período es QUINCENAL o
-  // SEMANAL, el motor de cálculo prorratea solo la base salarial y las
-  // provisiones (15/30 o 7/30 del mes), recalculando el IR sobre una
-  // proyección anual de 24 quincenas o 52 semanas en vez de 12 meses — no
-  // hay que dividir el salario a mano.
+  // el salario de referencia completo; cuando un colaborador se calcula
+  // como QUINCENAL o SEMANAL, el motor de cálculo prorratea solo su base
+  // salarial y sus provisiones (15/30 o 7/30 del mes), recalculando el IR
+  // sobre una proyección anual de 24 quincenas o 52 semanas en vez de 12
+  // meses — no hay que dividir el salario a mano.
+  //
+  // IMPORTANTE: desde que cada colaborador puede tener su PROPIA
+  // periodicidad habitual (Employee.periodicidad), este campo ya NO aplica
+  // por igual a todos los comprobantes del período — cada Payslip guarda la
+  // suya propia (Payslip.periodicidad). Este campo es solo un resumen para
+  // mostrar de un vistazo en Históricos: la periodicidad común si todos los
+  // comprobantes de este período la comparten, o "MIXTA" si se mezclaron
+  // colaboradores con distinta periodicidad en la misma corrida (ver
+  // runPayroll()/cargarPlanillaDesdeExcel() en actions.ts).
   periodicidad String   @default("MENSUAL")
   createdAt  DateTime   @default(now())
   approvedAt DateTime?
@@ -243,6 +266,13 @@ model Payslip {
   // null en comprobantes en córdobas. Se guarda para que el comprobante
   // quede como constancia fija, aunque el tipo de cambio cambie después.
   tipoCambioAplicado Decimal?  @db.Decimal(10, 4)
+  // Periodicidad que de verdad se usó para calcular ESTE comprobante (copia
+  // de Employee.periodicidad al momento de correr la planilla, o lo que se
+  // haya anulado para esa fila en el formulario a mano) — queda fijo aunque
+  // luego cambie la periodicidad habitual del colaborador, igual que
+  // moneda/tipoCambioAplicado arriba. MENSUAL por defecto para no afectar
+  // comprobantes ya existentes.
+  periodicidad   String        @default("MENSUAL")
   createdAt      DateTime      @default(now())
 }
 

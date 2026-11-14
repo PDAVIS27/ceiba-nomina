@@ -23,15 +23,33 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/**
- * Lee la periodicidad del formulario de "Correr nómina" (mano o Excel) —
- * MENSUAL por defecto si no viene nada, para no romper flujos existentes.
- */
-function leerPeriodicidad(formData: FormData): PeriodicidadKey {
-  const raw = String(formData.get("periodicidad") || "MENSUAL");
+/** Valida un valor de periodicidad suelto (de un campo de formulario) — MENSUAL por defecto si no es válido. */
+function validarPeriodicidad(raw: unknown): PeriodicidadKey {
   if (raw === "QUINCENAL") return "QUINCENAL";
   if (raw === "SEMANAL") return "SEMANAL";
   return "MENSUAL";
+}
+
+/**
+ * Lee la periodicidad HABITUAL de un colaborador a anular para ESTA corrida
+ * nada más — el formulario a mano manda un select `periodicidad_<id>` por
+ * cada fila (ver src/app/dashboard/nomina/page.tsx), ya pre-marcado con la
+ * periodicidad que el colaborador tiene guardada (Employee.periodicidad).
+ * Si por lo que sea no viene nada en el formulario (ej. una carga por
+ * Excel, que no tiene esta fila), cae de vuelta a `fallback` — normalmente
+ * la periodicidad guardada de ese mismo colaborador.
+ */
+function leerPeriodicidadPorEmpleado(formData: FormData, employeeId: string, fallback: PeriodicidadKey): PeriodicidadKey {
+  const raw = formData.get(`periodicidad_${employeeId}`);
+  return raw === null ? fallback : validarPeriodicidad(raw);
+}
+
+/** Resume la periodicidad de un conjunto de comprobantes para mostrar en Históricos — la común si todos comparten una, o "MIXTA" si se mezclaron distintas en la misma corrida. */
+function resumirPeriodicidad(periodicidades: PeriodicidadKey[]): string {
+  const distintas = new Set(periodicidades);
+  if (distintas.size === 0) return "MENSUAL";
+  if (distintas.size === 1) return periodicidades[0];
+  return "MIXTA";
 }
 
 /**
@@ -95,6 +113,11 @@ export async function addEmployee(formData: FormData) {
   // en dólares — ver comentario de Employee.moneda en schema.prisma. El
   // salario de arriba queda guardado en ESA moneda.
   const moneda = String(formData.get("moneda") || "NIO") === "USD" ? "USD" : "NIO";
+  // MENSUAL por defecto, o la periodicidad habitual que se le indique (ver
+  // Employee.periodicidad en schema.prisma) — con qué frecuencia se le paga
+  // normalmente a este colaborador, sin importar lo que use el resto del
+  // negocio.
+  const periodicidad = validarPeriodicidad(formData.get("periodicidad"));
   if (!fullName || !role || grossSalary <= 0) return;
   await prisma.employee.create({
     data: {
@@ -108,16 +131,18 @@ export async function addEmployee(formData: FormData) {
       tipoContrato,
       acumulaPrestaciones,
       moneda,
+      periodicidad,
     },
   });
   redirect("/dashboard/colaboradores?ok=1");
 }
 
 /**
- * Cambia la moneda en la que se le paga a un colaborador ya existente (NIO o
- * USD) — ver Employee.moneda en schema.prisma. No recalcula planillas ya
- * aprobadas (quedan como constancia fija de lo que se calculó en su momento,
- * cada una con su propia Payslip.moneda) — solo decide en qué moneda se
+ * Cambia la moneda y/o la periodicidad habitual de un colaborador ya
+ * existente — ver Employee.moneda y Employee.periodicidad en
+ * schema.prisma. No recalcula planillas ya aprobadas (quedan como
+ * constancia fija de lo que se calculó en su momento, cada una con su
+ * propia Payslip.moneda/Payslip.periodicidad) — solo decide cómo se
  * calculan las PRÓXIMAS corridas de este colaborador.
  */
 export async function actualizarMoneda(formData: FormData) {
@@ -127,7 +152,8 @@ export async function actualizarMoneda(formData: FormData) {
   if (!employee) return;
 
   const moneda = String(formData.get("moneda") || "NIO") === "USD" ? "USD" : "NIO";
-  await prisma.employee.update({ where: { id: employeeId }, data: { moneda } });
+  const periodicidad = validarPeriodicidad(formData.get("periodicidad"));
+  await prisma.employee.update({ where: { id: employeeId }, data: { moneda, periodicidad } });
   redirect(`/dashboard/colaboradores/${employeeId}?ok=moneda`);
 }
 
@@ -209,7 +235,6 @@ export async function runPayroll(formData: FormData) {
 
   const label = String(formData.get("label") || "Período sin nombre").trim();
   const { periodStart, periodEnd } = leerFechasPeriodo(formData, "/dashboard/nomina");
-  const periodicidad = leerPeriodicidad(formData);
   const tipoCambio = leerTipoCambio(formData);
 
   // Si algún colaborador incluido se paga en dólares, el tipo de cambio es
@@ -233,58 +258,73 @@ export async function runPayroll(formData: FormData) {
     );
   }
 
-  const period = await prisma.payrollPeriod.create({ data: { companyId, label, periodStart, periodEnd, periodicidad } });
   const hoy = new Date();
 
+  // Cada colaborador se calcula con SU PROPIA periodicidad (ver comentario
+  // de Employee.periodicidad en schema.prisma) — el select `periodicidad_
+  // <id>` de esa fila, ya pre-marcado con lo que tiene guardado, la anula
+  // solo para esta corrida si hace falta. Así se puede incluir en una
+  // MISMA corrida a colaboradores con distinta periodicidad habitual (ej.
+  // uno semanal junto a varios quincenales) sin tener que separarlos en
+  // corridas distintas.
+  const calculados = employees.map((e) => {
+    const horasExtraCantidad = Number(formData.get(`horas_${e.id}`) || 0);
+    const comisiones = Number(formData.get(`com_${e.id}`) || 0);
+    const retroactivos = Number(formData.get(`retro_${e.id}`) || 0);
+    const viaticos = Number(formData.get(`via_${e.id}`) || 0);
+    const otrasDeducciones = Math.max(Number(formData.get(`otrasDed_${e.id}`)) || 0, 0);
+    const otrasDeduccionesConcepto = String(formData.get(`otrasDedMotivo_${e.id}`) || "").trim() || null;
+    const antiguedadMeses = mesesEntre(new Date(e.startDate), hoy);
+    const monedaEmpleado = e.moneda === "USD" ? "USD" : "NIO";
+    const periodicidadEmpleado = leerPeriodicidadPorEmpleado(formData, e.id, validarPeriodicidad(e.periodicidad));
+
+    const d = calcularPeriodo({
+      bruto: Number(e.grossSalary),
+      horasExtraCantidad,
+      comisiones,
+      retroactivos,
+      viaticos,
+      antiguedadMeses,
+      otrasDeducciones,
+      otrasDeduccionesConcepto,
+      exentoIR,
+      tipoContrato: e.tipoContrato,
+      acumulaPrestaciones: e.acumulaPrestaciones,
+      periodicidad: periodicidadEmpleado,
+      moneda: monedaEmpleado,
+      tipoCambio,
+    });
+
+    return { e, d, periodicidadEmpleado };
+  });
+
+  const periodicidadResumen = resumirPeriodicidad(calculados.map((c) => c.periodicidadEmpleado));
+  const period = await prisma.payrollPeriod.create({
+    data: { companyId, label, periodStart, periodEnd, periodicidad: periodicidadResumen },
+  });
+
   await prisma.payslip.createMany({
-    data: employees.map((e) => {
-      const horasExtraCantidad = Number(formData.get(`horas_${e.id}`) || 0);
-      const comisiones = Number(formData.get(`com_${e.id}`) || 0);
-      const retroactivos = Number(formData.get(`retro_${e.id}`) || 0);
-      const viaticos = Number(formData.get(`via_${e.id}`) || 0);
-      const otrasDeducciones = Math.max(Number(formData.get(`otrasDed_${e.id}`)) || 0, 0);
-      const otrasDeduccionesConcepto = String(formData.get(`otrasDedMotivo_${e.id}`) || "").trim() || null;
-      const antiguedadMeses = mesesEntre(new Date(e.startDate), hoy);
-      const monedaEmpleado = e.moneda === "USD" ? "USD" : "NIO";
-
-      const d = calcularPeriodo({
-        bruto: Number(e.grossSalary),
-        horasExtraCantidad,
-        comisiones,
-        retroactivos,
-        viaticos,
-        antiguedadMeses,
-        otrasDeducciones,
-        otrasDeduccionesConcepto,
-        exentoIR,
-        tipoContrato: e.tipoContrato,
-        acumulaPrestaciones: e.acumulaPrestaciones,
-        periodicidad,
-        moneda: monedaEmpleado,
-        tipoCambio,
-      });
-
-      return {
-        periodId: period.id,
-        employeeId: e.id,
-        grossSalary: d.bruto,
-        horasExtraCantidad: d.horasExtraCantidad,
-        horasExtraMonto: d.horasExtraMonto,
-        comisiones: d.comisiones,
-        retroactivos: d.retroactivos,
-        viaticos: d.viaticos,
-        provisionAguinaldo: d.provisionAguinaldo,
-        provisionVacaciones: d.provisionVacaciones,
-        provisionIndemnizacion: d.provisionIndemnizacion,
-        otrasDeducciones: d.otrasDeducciones,
-        otrasDeduccionesConcepto: d.otrasDeduccionesConcepto,
-        inssLaboral: d.inssLaboral,
-        irMensual: d.irMensual,
-        netPay: d.netoPagar,
-        moneda: d.moneda,
-        tipoCambioAplicado: d.tipoCambioAplicado ?? null,
-      };
-    }),
+    data: calculados.map(({ e, d, periodicidadEmpleado }) => ({
+      periodId: period.id,
+      employeeId: e.id,
+      grossSalary: d.bruto,
+      horasExtraCantidad: d.horasExtraCantidad,
+      horasExtraMonto: d.horasExtraMonto,
+      comisiones: d.comisiones,
+      retroactivos: d.retroactivos,
+      viaticos: d.viaticos,
+      provisionAguinaldo: d.provisionAguinaldo,
+      provisionVacaciones: d.provisionVacaciones,
+      provisionIndemnizacion: d.provisionIndemnizacion,
+      otrasDeducciones: d.otrasDeducciones,
+      otrasDeduccionesConcepto: d.otrasDeduccionesConcepto,
+      inssLaboral: d.inssLaboral,
+      irMensual: d.irMensual,
+      netPay: d.netoPagar,
+      moneda: d.moneda,
+      tipoCambioAplicado: d.tipoCambioAplicado ?? null,
+      periodicidad: periodicidadEmpleado,
+    })),
   });
 
   redirect(`/dashboard/historicos?periodo=${period.id}`);
@@ -301,7 +341,6 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
     redirect(`/dashboard/nomina?error=${encodeURIComponent("No seleccionaste ningún archivo.")}`);
   }
   const { periodStart, periodEnd } = leerFechasPeriodo(formData, "/dashboard/nomina");
-  const periodicidad = leerPeriodicidad(formData);
   const tipoCambio = leerTipoCambio(formData);
 
   const duplicado = await existeBorradorConEseNombre(companyId, label);
@@ -331,18 +370,19 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
       tipoContrato: "LABORAL" | "SERVICIOS_PROFESIONALES";
       acumulaPrestaciones: boolean;
       moneda: string;
+      periodicidad: string;
     } | null = null;
 
     if (f.externalCode) {
       empleado = await prisma.employee.findUnique({
         where: { companyId_externalCode: { companyId, externalCode: f.externalCode } },
-        select: { id: true, startDate: true, tipoContrato: true, acumulaPrestaciones: true, moneda: true },
+        select: { id: true, startDate: true, tipoContrato: true, acumulaPrestaciones: true, moneda: true, periodicidad: true },
       });
     }
     if (!empleado) {
       empleado = await prisma.employee.findFirst({
         where: { companyId, fullName: { equals: f.fullName, mode: "insensitive" } },
-        select: { id: true, startDate: true, tipoContrato: true, acumulaPrestaciones: true, moneda: true },
+        select: { id: true, startDate: true, tipoContrato: true, acumulaPrestaciones: true, moneda: true, periodicidad: true },
       });
     }
 
@@ -378,18 +418,21 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
         tipoContrato: nuevo.tipoContrato,
         acumulaPrestaciones: nuevo.acumulaPrestaciones,
         moneda: nuevo.moneda,
+        periodicidad: nuevo.periodicidad,
       };
     }
 
     (f as any)._employeeId = empleado.id;
     (f as any)._startDate = empleado.startDate;
-    // La plantilla de Excel no trae tipo de contrato ni moneda — se respeta
-    // lo que el colaborador ya tenía configurado (o LABORAL/NIO por defecto
-    // si es nuevo; para un colaborador en dólares, configúralo primero en
+    // La plantilla de Excel no trae tipo de contrato, moneda ni
+    // periodicidad — se respeta lo que el colaborador ya tenía configurado
+    // (o LABORAL/NIO/MENSUAL por defecto si es nuevo; para un colaborador
+    // en dólares o con otra periodicidad habitual, configúralo primero en
     // Colaboradores y luego súbelo por Excel como siempre).
     (f as any)._tipoContrato = empleado.tipoContrato;
     (f as any)._acumulaPrestaciones = empleado.acumulaPrestaciones;
     (f as any)._moneda = empleado.moneda === "USD" ? "USD" : "NIO";
+    (f as any)._periodicidad = validarPeriodicidad(empleado.periodicidad);
   }
 
   // Si algún colaborador del archivo se paga en dólares, el tipo de cambio
@@ -403,7 +446,10 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
     );
   }
 
-  const period = await prisma.payrollPeriod.create({ data: { companyId, label, periodStart, periodEnd, periodicidad } });
+  const periodicidadResumen = resumirPeriodicidad((filas as any[]).map((f) => f._periodicidad as PeriodicidadKey));
+  const period = await prisma.payrollPeriod.create({
+    data: { companyId, label, periodStart, periodEnd, periodicidad: periodicidadResumen },
+  });
 
   await prisma.payslip.createMany({
     data: (filas as any[]).map((f) => {
@@ -420,7 +466,7 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
         exentoIR,
         tipoContrato: f._tipoContrato,
         acumulaPrestaciones: f._acumulaPrestaciones,
-        periodicidad,
+        periodicidad: f._periodicidad,
         moneda: f._moneda,
         tipoCambio,
       });
@@ -443,6 +489,7 @@ export async function cargarPlanillaDesdeExcel(formData: FormData) {
         netPay: d.netoPagar,
         moneda: d.moneda,
         tipoCambioAplicado: d.tipoCambioAplicado ?? null,
+        periodicidad: f._periodicidad,
       };
     }),
   });
