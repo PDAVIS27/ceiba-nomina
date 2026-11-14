@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calcularPeriodo } from "@/lib/payroll";
+import { calcularPeriodo, normalizarPeriodicidad as validarPeriodicidadUI } from "@/lib/payroll";
 import { mesesEntre } from "@/lib/dateUtils";
 import { esExentoIR } from "@/lib/regimenFiscal";
 import { TERMINATION_LABELS } from "@/lib/provisiones";
@@ -12,6 +12,14 @@ import TipoContratoYPrestaciones from "@/components/TipoContratoYPrestaciones";
 import { addEmployee } from "@/app/dashboard/actions";
 
 export const dynamic = "force-dynamic";
+
+// Etiqueta corta para el tag junto al nombre de cada colaborador — solo
+// cuando no es Mensual (el caso de siempre, sin aclaración).
+const PERIODICIDAD_TAG: Record<string, string> = {
+  QUINCENAL: "QUINCENAL",
+  SEMANAL: "SEMANAL",
+  SEMANAL_5: "SEMANAL · L-V",
+};
 
 export default async function ColaboradoresPage() {
   const session = await getServerSession(authOptions);
@@ -45,7 +53,7 @@ export default async function ColaboradoresPage() {
       tipoContrato: e.tipoContrato,
       acumulaPrestaciones: e.acumulaPrestaciones,
       moneda: e.moneda === "USD" ? "USD" : "NIO",
-      periodicidad: e.periodicidad === "QUINCENAL" ? "QUINCENAL" : e.periodicidad === "SEMANAL" ? "SEMANAL" : "MENSUAL",
+      periodicidad: validarPeriodicidadUI(e.periodicidad),
     }),
   }));
 
@@ -72,7 +80,8 @@ export default async function ColaboradoresPage() {
             <select name="periodicidad" defaultValue="MENSUAL" className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
               <option value="MENSUAL">Mensual</option>
               <option value="QUINCENAL">Quincenal</option>
-              <option value="SEMANAL">Semanal</option>
+              <option value="SEMANAL">Semanal (7 días, incluye descanso pagado)</option>
+              <option value="SEMANAL_5">Semanal — solo lunes a viernes (5 días)</option>
             </select>
           </div>
           <Field name="grossSalary" label="Salario bruto" type="number" placeholder="9200" />
@@ -122,9 +131,9 @@ export default async function ColaboradoresPage() {
                   <div className="font-medium">
                     {e.fullName}
                     {e.moneda === "USD" && <span className="text-gold text-[10px] font-mono ml-1.5">USD</span>}
-                    {e.periodicidad !== "MENSUAL" && (
+                    {PERIODICIDAD_TAG[e.periodicidad] && (
                       <span className="text-inkdim text-[10px] font-mono ml-1.5 border border-linestrong rounded px-1 py-0.5">
-                        {e.periodicidad === "SEMANAL" ? "SEMANAL" : "QUINCENAL"}
+                        {PERIODICIDAD_TAG[e.periodicidad]}
                       </span>
                     )}
                   </div>

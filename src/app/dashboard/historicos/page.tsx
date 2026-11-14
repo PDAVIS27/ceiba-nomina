@@ -31,6 +31,7 @@ const MESES = [
 const PERIODICIDAD_PERIODO_LABELS: Record<string, string> = {
   QUINCENAL: "Quincenal",
   SEMANAL: "Semanal",
+  SEMANAL_5: "Semanal (lunes a viernes)",
   MIXTA: "periodicidad mixta",
 };
 
@@ -39,6 +40,7 @@ const PERIODICIDAD_PERIODO_LABELS: Record<string, string> = {
 const PERIODICIDAD_PAYSLIP_LABELS: Record<string, string> = {
   QUINCENAL: "QUINCENAL",
   SEMANAL: "SEMANAL",
+  SEMANAL_5: "SEMANAL · L-V",
 };
 
 export default async function HistoricosPage({

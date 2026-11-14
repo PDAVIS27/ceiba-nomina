@@ -132,7 +132,10 @@ export default async function ColaboradorDetallePage({
             tipo de cambio del día cada vez que corras su planilla o calcules su liquidación, solo para ubicar el
             tramo correcto. La <strong>periodicidad</strong> queda pre-marcada en su fila cada vez que corras nómina
             a mano — así se puede incluir en la misma corrida junto con colaboradores que cobran distinto (ej. él
-            semanal, los demás quincenales), sin tener que separar la planilla.
+            semanal, los demás quincenales), sin tener que separar la planilla. "Semanal" paga una semana completa
+            (incluye el descanso semanal pagado, Art. 64 CT) aunque trabaje solo de lunes a viernes; "Semanal — solo
+            lunes a viernes" paga ÚNICAMENTE esos 5 días, sin nada por el fin de semana — úsala solo si de verdad
+            acordaste con este colaborador pagarle nada más por día trabajado.
           </p>
           <form action={actualizarMoneda} className="flex flex-wrap gap-3 items-end">
             <input type="hidden" name="employeeId" value={employee.id} />
@@ -148,7 +151,8 @@ export default async function ColaboradorDetallePage({
               <select name="periodicidad" defaultValue={employee.periodicidad} className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
                 <option value="MENSUAL">Mensual</option>
                 <option value="QUINCENAL">Quincenal</option>
-                <option value="SEMANAL">Semanal</option>
+                <option value="SEMANAL">Semanal (7 días, incluye descanso pagado)</option>
+                <option value="SEMANAL_5">Semanal — solo lunes a viernes (5 días)</option>
               </select>
             </div>
             <SubmitButton className="px-4 py-2.5 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium" pendingText="Guardando…">

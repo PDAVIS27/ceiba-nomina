@@ -260,41 +260,45 @@ colaboradores nuevos como Laboral, acumulando) — para un colaborador que ya
 exista, respeta lo que tenga configurado. Si quieres que la plantilla de
 Excel también traiga el tipo de contrato, dime y se lo agrego.
 
-## Periodicidad: Mensual, Quincenal o Semanal
+## Periodicidad: Mensual, Quincenal, Semanal o Semanal (lunes a viernes)
 
-Al correr nómina (a mano o por Excel) eliges la **periodicidad** del
-período: Mensual (de siempre), Quincenal o Semanal. El salario que tienes
-guardado en Colaboradores — o el que pongas en la columna "Salario mensual
-(C$)" del Excel — **siempre es el salario mensual completo de referencia,
-nunca lo dividas tú mismo**. Si eliges Quincenal o Semanal, Ceiba:
+La periodicidad es un dato de **cada colaborador**, no de la planilla
+completa — en Colaboradores, al agregarlo o después desde su detalle
+("Moneda y periodicidad"), le indicas con qué frecuencia se le paga
+habitualmente:
 
-- Paga la parte proporcional de ese salario de referencia en este período
-  (15/30 para Quincenal, 7/30 para Semanal).
-- Calcula el INSS laboral sobre esa parte.
-- Proyecta el IR sobre 24 quincenas o 52 semanas al año en vez de 12 meses
-  (en vez de dividir entre 12, divide entre 24 o 52) — así la tabla
-  progresiva del Art. 23 sigue aplicándose correctamente sobre el verdadero
-  ingreso anual del colaborador, no sobre el doble o el cuádruple.
-- Acumula la parte proporcional de aguinaldo/vacaciones/antigüedad de ese
-  período (para que sumando los períodos de un mes te dé la misma provisión
-  mensual de siempre).
+- **Mensual** (de siempre) — paga el salario completo del mes.
+- **Quincenal** — paga la mitad (15/30) del salario de referencia.
+- **Semanal** — paga una semana completa (7/30 del salario de referencia).
+  Incluye el séptimo día de descanso pagado (Art. 64 CT), sin importar si el
+  colaborador trabaja 5 o 6 días esa semana — es el caso normal en
+  Nicaragua.
+- **Semanal — solo lunes a viernes** — paga ÚNICAMENTE los 5 días
+  realmente trabajados (5/30 del salario de referencia), sin nada por el
+  fin de semana. Úsala solo si de verdad acordaste con ese colaborador
+  pagarle nada más por día trabajado, sin descanso semanal pagado — es una
+  decisión del negocio, no lo que pide la ley por defecto.
+
+El salario que tienes guardado en Colaboradores **siempre es el salario
+mensual completo de referencia, nunca lo dividas tú mismo**: elige la
+periodicidad de cada colaborador y Ceiba calcula sola la parte que
+corresponde — el INSS laboral sobre esa parte, y el IR proyectado sobre 24
+quincenas o 52 pagos semanales al año en vez de 12 meses (en vez de dividir
+entre 12, divide entre 24 o 52), así la tabla progresiva del Art. 23 sigue
+aplicándose correctamente sobre el verdadero ingreso anual del colaborador.
+Las provisiones de aguinaldo/vacaciones/antigüedad se acumulan en la misma
+proporción, para que sumando los períodos de un mes te dé la misma
+provisión mensual de siempre.
 
 Horas extra, comisiones, retroactivos, viáticos y otras deducciones **no se
 tocan** — esos campos ya se piden como el monto de ese período específico,
 no un monto mensual, así que se usan tal cual los escribas. La hora extra
 también se sigue calculando con el salario mensual completo (salario/30/8,
 Art. 62/65 CT), sin importar la periodicidad — es la tarifa legal de la
-hora, no cambia por cuántas veces al mes pagues.
+hora, no cambia por cuántas veces al mes pagues. Mensual sigue siendo el
+valor por defecto para un colaborador nuevo.
 
-Mensual sigue siendo el valor por defecto en ambos formularios, y su cálculo
-no cambió en nada con esta función.
-
-### Periodicidad por colaborador: correr junto a uno que cobra distinto
-
-La periodicidad es un dato de **cada colaborador** (Colaboradores → "Moneda
-y periodicidad"), no de la planilla completa. Al agregarlo, o después desde
-su detalle, le indicas su periodicidad habitual: Mensual, Quincenal o
-Semanal — con qué frecuencia se le paga normalmente.
+### Correr junto a un colaborador que cobra distinto
 
 Al "Generar preplanilla a mano", cada fila de la tabla trae su propia
 periodicidad **ya marcada** según lo que ese colaborador tiene configurado,
@@ -315,8 +319,8 @@ o está de permiso), sin tocar su periodicidad habitual.
 Cuando una misma planilla termina con colaboradores de distinta
 periodicidad, el encabezado del período en Históricos muestra "periodicidad
 mixta" en vez de una sola, y cada comprobante trae su propia etiqueta
-(Quincenal/Semanal) junto a su nombre para que quede claro cómo se calculó
-cada quien.
+(Quincenal/Semanal/Semanal · L-V) junto a su nombre para que quede claro
+cómo se calculó cada quien.
 
 ---
 

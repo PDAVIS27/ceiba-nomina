@@ -147,7 +147,8 @@ export default async function NominaPage({
                       >
                         <option value="MENSUAL">Mensual</option>
                         <option value="QUINCENAL">Quincenal</option>
-                        <option value="SEMANAL">Semanal</option>
+                        <option value="SEMANAL">Semanal (7 días)</option>
+                        <option value="SEMANAL_5">Semanal (L-V, 5 días)</option>
                       </select>
                     </td>
                     <td className="py-2.5 text-right">

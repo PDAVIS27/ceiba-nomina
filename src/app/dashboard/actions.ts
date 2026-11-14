@@ -3,7 +3,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calcularPeriodo, type PeriodicidadKey } from "@/lib/payroll";
+import { calcularPeriodo, normalizarPeriodicidad, type PeriodicidadKey } from "@/lib/payroll";
 import { esExentoIR } from "@/lib/regimenFiscal";
 import { parsearExcelColaboradores } from "@/lib/bulkImport";
 import {
@@ -23,12 +23,10 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Valida un valor de periodicidad suelto (de un campo de formulario) — MENSUAL por defecto si no es válido. */
-function validarPeriodicidad(raw: unknown): PeriodicidadKey {
-  if (raw === "QUINCENAL") return "QUINCENAL";
-  if (raw === "SEMANAL") return "SEMANAL";
-  return "MENSUAL";
-}
+// Valida un valor de periodicidad suelto (de un campo de formulario) — ver
+// normalizarPeriodicidad() en src/lib/payroll.ts (única fuente de verdad,
+// compartida con las páginas de Colaboradores/Nómina/Históricos).
+const validarPeriodicidad = normalizarPeriodicidad;
 
 /**
  * Lee la periodicidad HABITUAL de un colaborador a anular para ESTA corrida
