@@ -77,13 +77,28 @@ export function impuestoAnualSegunTabla(expectativaAnual: number): number {
  * ningún colaborador de ese negocio. El INSS laboral (7%) SIEMPRE se calcula
  * igual, sin importar el régimen — es un aporte a la INSS, no un impuesto de
  * la DGI.
+ *
+ * `tipoCambio`: SOLO para un colaborador pagado en dólares (Employee.moneda
+ * "USD" — ver schema.prisma). Los tramos de la Tabla de IR (Art. 23, Ley
+ * 822) son montos fijos EN CÓRDOBAS, así que para decidir en qué tramo cae
+ * un ingreso en dólares hay que convertir la expectativa anual a córdobas
+ * con el tipo de cambio de la corrida (córdobas por 1 dólar). El INSS
+ * laboral (7%, tasa fija, no por tramos) NO necesita esto — el 7% de un
+ * monto en dólares ya es correcto en dólares sin convertir nada. El
+ * resultado (irAnual/irMensual) se devuelve YA CONVERTIDO DE VUELTA a la
+ * misma moneda de `brutoMensual`, para poder restarlo del bruto sin más
+ * conversiones. Déjalo undefined/0 para un colaborador en córdobas (de
+ * siempre) — el comportamiento no cambia en ese caso.
  */
-export function calcularIR(brutoMensual: number, exentoIR: boolean = false): DesgloseIR {
+export function calcularIR(brutoMensual: number, exentoIR: boolean = false, tipoCambio?: number): DesgloseIR {
   const inssLaboral = round2(brutoMensual * INSS_LABORAL);
   const baseImponibleMensual = round2(brutoMensual - inssLaboral);
   const expectativaAnual = round2(baseImponibleMensual * 12);
-  const tramo = TABLA_IR.find((t) => expectativaAnual <= t.hasta)!;
-  const irAnual = exentoIR ? 0 : impuestoAnualSegunTabla(expectativaAnual);
+  const factorNIO = tipoCambio && tipoCambio > 0 ? tipoCambio : 1;
+  const expectativaAnualNIO = round2(expectativaAnual * factorNIO);
+  const tramo = TABLA_IR.find((t) => expectativaAnualNIO <= t.hasta)!;
+  const irAnualNIO = exentoIR ? 0 : impuestoAnualSegunTabla(expectativaAnualNIO);
+  const irAnual = factorNIO !== 1 ? round2(irAnualNIO / factorNIO) : irAnualNIO;
   const irMensual = exentoIR ? 0 : round2(irAnual / 12);
   const neto = round2(brutoMensual - inssLaboral - irMensual);
   return {
@@ -228,6 +243,13 @@ export interface DesglosePeriodo {
   // que la interfaz muestre la etiqueta correcta sin tener que repetir la
   // comparación de tipoContrato en cada página.
   esServiciosProfesionales: boolean;
+  // "NIO" (de siempre) o "USD" — en qué moneda están TODOS los montos de
+  // este desglose (bruto, provisiones, inssLaboral, irMensual, netoPagar).
+  moneda: MonedaKey;
+  // Tipo de cambio (córdobas por 1 dólar) que de verdad se usó para el
+  // cálculo de IR — solo cuando moneda es "USD" y se indicó uno válido al
+  // correr la planilla; undefined en cualquier otro caso.
+  tipoCambioAplicado?: number;
 }
 
 /**
@@ -243,15 +265,19 @@ export interface DesglosePeriodo {
  * completo. Un contador debe confirmar si esto es aceptable antes de usarlo
  * con clientes reales.
  */
-export type PeriodicidadKey = "MENSUAL" | "QUINCENAL";
+export type PeriodicidadKey = "MENSUAL" | "QUINCENAL" | "SEMANAL";
+export type MonedaKey = "NIO" | "USD";
 
 export function calcularPeriodo(params: {
   // SIEMPRE el salario mensual de referencia, sin importar `periodicidad` —
   // nunca lo dividas tú mismo antes de llamar esta función. Si
-  // `periodicidad` es QUINCENAL, esta función prorratea internamente la
-  // base salarial y las provisiones (ver más abajo); el valor de la hora
-  // extra también sigue derivándose de este salario mensual completo
-  // (Art. 62/65 CT: salario/30/8), no del monto ya prorrateado.
+  // `periodicidad` es QUINCENAL o SEMANAL, esta función prorratea
+  // internamente la base salarial y las provisiones (ver más abajo); el
+  // valor de la hora extra también sigue derivándose de este salario
+  // mensual completo (Art. 62/65 CT: salario/30/8), no del monto ya
+  // prorrateado. Está en la moneda de `moneda` (ver más abajo) — un
+  // colaborador en USD tiene aquí su salario mensual en dólares, no en
+  // córdobas.
   bruto: number;
   // Monto YA correspondiente a este período específico (no mensual) — así
   // ya lo pide la plantilla de Excel para estas columnas.
@@ -262,12 +288,28 @@ export function calcularPeriodo(params: {
   antiguedadMeses?: number;
   otrasDeducciones?: number;
   otrasDeduccionesConcepto?: string | null;
-  // MENSUAL (por defecto, sin cambios de comportamiento) o QUINCENAL. En
-  // QUINCENAL, la base salarial y las provisiones de este período se
-  // prorratean a la mitad, y el IR se proyecta sobre 24 quincenas al año en
-  // vez de 12 meses — así el salario mensual de referencia nunca cambia en
-  // Colaboradores/Excel, y no hay que calcular la mitad a mano.
+  // MENSUAL (por defecto, sin cambios de comportamiento), QUINCENAL o
+  // SEMANAL. En QUINCENAL/SEMANAL, la base salarial y las provisiones de
+  // este período se prorratean (15/30 o 7/30 del mes), y el IR se proyecta
+  // sobre 24 quincenas o 52 semanas al año en vez de 12 meses — así el
+  // salario mensual de referencia nunca cambia en Colaboradores/Excel, y no
+  // hay que calcular la parte a mano. SEMANAL usa 52 semanas/año como
+  // aproximación estándar (365/7 ≈ 52.14) — igual de simple que el resto de
+  // este motor ("proyección simple", ver comentario de la función).
   periodicidad?: PeriodicidadKey;
+  // "NIO" (por defecto, córdobas) o "USD" (dólares) — Employee.moneda. Todos
+  // los montos de entrada (bruto, comisiones, retroactivos, viáticos, otras
+  // deducciones) deben venir en ESTA moneda; el resultado completo también
+  // queda en esta moneda.
+  moneda?: MonedaKey;
+  // Tipo de cambio (córdobas por 1 dólar) del día de esta corrida — SOLO
+  // relevante cuando moneda es "USD" (se ignora para NIO). Necesario porque
+  // la tabla progresiva de IR (Art. 23, Ley 822) usa tramos en córdobas; sin
+  // un tipo de cambio válido, un colaborador en USD NO se le retiene IR (se
+  // trata como si no se pudiera calcular) — por eso la interfaz de Correr
+  // nómina exige este dato antes de dejar correr una planilla con
+  // colaboradores en dólares. El INSS laboral (7%, tasa fija) no lo necesita.
+  tipoCambio?: number;
   // Negocio en régimen Cuota Fija — ver comentario de calcularIR() arriba.
   // También exonera la retención fija de servicios profesionales (ver más
   // abajo). Base legal verificada: Art. 259 de la Ley 822 (LCT, dentro del
@@ -307,21 +349,27 @@ export function calcularPeriodo(params: {
   const esServiciosProfesionales = params.tipoContrato === "SERVICIOS_PROFESIONALES";
   const acumulaPrestaciones = params.acumulaPrestaciones ?? !esServiciosProfesionales;
   const periodicidad = params.periodicidad ?? "MENSUAL";
-  const esQuincenal = periodicidad === "QUINCENAL";
+  const moneda: MonedaKey = params.moneda === "USD" ? "USD" : "NIO";
+  // Tipo de cambio válido solo si viene un número mayor que cero — igual que
+  // en calcularIR(), un USD sin tipo de cambio se trata como "no se puede
+  // ubicar el tramo de IR en córdobas" (ver más abajo), nunca se inventa uno.
+  const tipoCambio = moneda === "USD" && params.tipoCambio && params.tipoCambio > 0 ? params.tipoCambio : undefined;
   // Días de referencia para prorratear provisiones con las mismas funciones
   // *PorDias que ya usa src/lib/provisiones.ts para la liquidación — con 30
   // días dan exactamente lo mismo que provisionAguinaldo()/Vacaciones()/
   // Indemnizacion() de siempre (salarioMensual/360 × 30 = salarioMensual/12),
   // así que MENSUAL queda bit a bit igual que antes de este cambio.
-  const diasDelPeriodo = esQuincenal ? 15 : 30;
+  const diasDelPeriodo = periodicidad === "SEMANAL" ? 7 : periodicidad === "QUINCENAL" ? 15 : 30;
   // Solo la BASE salarial se prorratea — horas extra, comisiones,
   // retroactivos, viáticos y otras deducciones ya vienen como montos de ESTE
   // período (así lo pide la plantilla de Excel), no se tocan.
-  const baseSalarialDelPeriodo = round2(salarioMensualReferencia * (esQuincenal ? 0.5 : 1));
+  const baseSalarialDelPeriodo = round2(salarioMensualReferencia * (diasDelPeriodo / 30));
   // Cuántos de estos períodos hay en un año — para proyectar la expectativa
   // anual de renta sobre la que se aplica la tarifa progresiva del Art. 23 (o
   // el 10% fijo), igual que ya se hacía para un mes, pero generalizado.
-  const periodosPorAnio = esQuincenal ? 24 : 12;
+  // SEMANAL usa 52 (aproximación estándar, ver comentario de `periodicidad`
+  // en los parámetros de la función).
+  const periodosPorAnio = periodicidad === "SEMANAL" ? 52 : periodicidad === "QUINCENAL" ? 24 : 12;
 
   const horasExtraMonto = calcularHorasExtra(salarioMensualReferencia, horasExtraCantidad);
   const totalGravable = round2(baseSalarialDelPeriodo + horasExtraMonto + comisiones + retroactivos);
@@ -337,7 +385,10 @@ export function calcularPeriodo(params: {
     // Sin relación de subordinación: no hay INSS, y la retención es un
     // porcentaje fijo sobre todo lo pagado, no la tabla progresiva del
     // Art. 23 (esa tabla es solo para rentas del trabajo en relación de
-    // dependencia). Ver RETENCION_SERVICIOS_PROFESIONALES arriba.
+    // dependencia). Ver RETENCION_SERVICIOS_PROFESIONALES arriba. Al ser un
+    // porcentaje fijo (no por tramos), funciona igual sin importar la
+    // moneda — no hace falta convertir nada aquí, a diferencia del caso
+    // laboral de abajo.
     //
     // Si exentoIR (Cuota Fija) está activo, tampoco se retiene esto — ver la
     // base legal verificada (Art. 259 LCT) en el comentario de `exentoIR`
@@ -349,13 +400,27 @@ export function calcularPeriodo(params: {
     irMensual = exentoIR ? 0 : round2(totalGravable * RETENCION_SERVICIOS_PROFESIONALES);
     irAnual = round2(irMensual * periodosPorAnio);
   } else {
+    // INSS laboral: 7% fijo, no por tramos — correcto en cualquier moneda
+    // sin convertir nada (7% de US$ ya es correcto en dólares).
     inssLaboral = round2(totalGravable * INSS_LABORAL);
     baseImponibleMensual = round2(totalGravable - inssLaboral);
     expectativaAnual = round2(baseImponibleMensual * periodosPorAnio);
-    tramo = TABLA_IR.find((t) => expectativaAnual <= t.hasta)!;
-    irAnual = exentoIR
+    // La Tabla de IR (Art. 23, Ley 822) sí tiene tramos fijos EN CÓRDOBAS —
+    // para un colaborador en USD hay que convertir la expectativa anual a
+    // córdobas SOLO para ubicar el tramo y calcular el impuesto anual, y
+    // luego devolver ese impuesto ya convertido de vuelta a dólares (para
+    // poder restarlo del bruto sin más conversiones). Sin un tipo de cambio
+    // válido, un colaborador en USD queda sin IR calculado (factorNIO = 1
+    // trataría dólares como si fueran córdobas, subestimando muchísimo el
+    // tramo) — la interfaz de Correr nómina exige este dato antes de dejar
+    // avanzar una corrida con colaboradores en dólares.
+    const factorNIO = tipoCambio ?? 1;
+    const expectativaAnualNIO = round2(expectativaAnual * factorNIO);
+    tramo = TABLA_IR.find((t) => expectativaAnualNIO <= t.hasta)!;
+    const irAnualNIO = exentoIR
       ? 0
-      : round2(Math.max(tramo.base + (expectativaAnual - tramo.exceso) * tramo.tasa, 0));
+      : round2(Math.max(tramo.base + (expectativaAnualNIO - tramo.exceso) * tramo.tasa, 0));
+    irAnual = factorNIO !== 1 ? round2(irAnualNIO / factorNIO) : irAnualNIO;
     irMensual = exentoIR ? 0 : round2(irAnual / periodosPorAnio);
   }
 
@@ -396,6 +461,8 @@ export function calcularPeriodo(params: {
     otrasDeduccionesConcepto,
     netoPagar,
     esServiciosProfesionales,
+    moneda,
+    tipoCambioAplicado: tipoCambio,
   };
 }
 

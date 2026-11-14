@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, PageSizes, type PDFPage } from "pdf-lib";
+import { formatMonto, formatTotalPorMoneda } from "@/lib/moneda";
 
 export interface FilaPDF {
   nombre: string;
@@ -20,6 +21,9 @@ export interface FilaPDF {
   // true si este colaborador es de servicios profesionales (retención fija
   // del 10%, sin INSS) en vez del cálculo laboral de siempre.
   esServiciosProfesionales?: boolean;
+  // "NIO" (por defecto) o "USD" — en qué moneda están los montos de esta
+  // fila (Payslip.moneda). Ver src/lib/moneda.ts.
+  moneda?: string | null;
 }
 
 export interface DatosPreplanillaPDF {
@@ -35,8 +39,11 @@ export interface DatosPreplanillaPDF {
   tipoPeriodo?: "NOMINA" | "AGUINALDO";
 }
 
-function money(n: number): string {
-  return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Igual que formatMonto() de src/lib/moneda.ts, pero con la firma money(n,
+// moneda) que ya usaba este archivo — moneda indefinida sigue mostrando "C$"
+// como siempre (comprobantes/PDFs de antes de este campo).
+function money(n: number, moneda?: string | null): string {
+  return formatMonto(n, moneda);
 }
 
 export async function generarPDFComprobanteIndividual(datos: {
@@ -57,6 +64,7 @@ export async function generarPDFComprobanteIndividual(datos: {
   ir: number;
   neto: number;
   esServiciosProfesionales?: boolean;
+  moneda?: string | null;
 }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -106,26 +114,26 @@ export async function generarPDFComprobanteIndividual(datos: {
 
   texto("INGRESOS", margin, y, { size: 7.5, bold: true, color: EMERALD });
   y -= 14;
-  fila("Salario bruto", money(datos.bruto));
-  if (datos.horasExtraMonto > 0) fila(`Horas extra (${datos.horasExtraCantidad}h)`, money(datos.horasExtraMonto));
-  if (datos.comisiones > 0) fila("Comisiones", money(datos.comisiones));
-  if (datos.retroactivos > 0) fila("Retroactivos", money(datos.retroactivos));
-  if (datos.viaticos > 0) fila("Viáticos", money(datos.viaticos));
+  fila("Salario bruto", money(datos.bruto, datos.moneda));
+  if (datos.horasExtraMonto > 0) fila(`Horas extra (${datos.horasExtraCantidad}h)`, money(datos.horasExtraMonto, datos.moneda));
+  if (datos.comisiones > 0) fila("Comisiones", money(datos.comisiones, datos.moneda));
+  if (datos.retroactivos > 0) fila("Retroactivos", money(datos.retroactivos, datos.moneda));
+  if (datos.viaticos > 0) fila("Viáticos", money(datos.viaticos, datos.moneda));
 
   linea();
   texto("RETENCIONES", margin, y, { size: 7.5, bold: true, color: GOLD });
   y -= 14;
   if (datos.esServiciosProfesionales) {
-    fila("Retención servicios profesionales (10%)", "- " + money(datos.ir));
+    fila("Retención servicios profesionales (10%)", "- " + money(datos.ir, datos.moneda));
   } else {
-    fila("INSS laboral", "- " + money(datos.inss));
-    fila("IR retenido", "- " + money(datos.ir));
+    fila("INSS laboral", "- " + money(datos.inss, datos.moneda));
+    fila("IR retenido", "- " + money(datos.ir, datos.moneda));
   }
   if ((datos.otrasDeducciones ?? 0) > 0) {
-    fila(datos.otrasDeduccionesConcepto || "Otras deducciones", "- " + money(datos.otrasDeducciones!));
+    fila(datos.otrasDeduccionesConcepto || "Otras deducciones", "- " + money(datos.otrasDeducciones!, datos.moneda));
   }
   linea(false);
-  fila("NETO A PAGAR", money(datos.neto), true);
+  fila("NETO A PAGAR", money(datos.neto, datos.moneda), true);
 
   return pdf.save();
 }
@@ -154,6 +162,7 @@ export async function generarPDFLiquidacion(datos: {
   gravableIr: number;
   totalIngresos: number;
   total: number;
+  moneda?: string | null;
 }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -254,25 +263,25 @@ export async function generarPDFLiquidacion(datos: {
   const filaAlto = 19;
 
   const ingresoFilas: { concepto: string; monto: string; bold?: boolean }[] = [
-    { concepto: "Aguinaldo pendiente (exento)", monto: money(datos.aguinaldoPendiente) },
-    { concepto: "Vacaciones pendientes (gravable)", monto: money(datos.vacacionesPendientes) },
+    { concepto: "Aguinaldo pendiente (exento)", monto: money(datos.aguinaldoPendiente, datos.moneda) },
+    { concepto: "Vacaciones pendientes (gravable)", monto: money(datos.vacacionesPendientes, datos.moneda) },
     ...(datos.horasExtraCantidad > 0
       ? [
           {
             concepto: `Horas extra pendientes · ${datos.horasExtraCantidad} hrs (gravable)`,
-            monto: money(datos.horasExtraMonto),
+            monto: money(datos.horasExtraMonto, datos.moneda),
           },
         ]
       : []),
     {
       concepto: "Indemnización por antigüedad" + (datos.aplicaIndemnizacion ? " (exenta)" : ""),
-      monto: datos.aplicaIndemnizacion ? money(datos.indemnizacion) : "No aplica",
+      monto: datos.aplicaIndemnizacion ? money(datos.indemnizacion, datos.moneda) : "No aplica",
     },
     ...datos.pagosPendientes.map((p) => ({
       concepto: `${p.concepto || "Pago pendiente"} (gravable)`,
-      monto: money(p.monto),
+      monto: money(p.monto, datos.moneda),
     })),
-    { concepto: "TOTAL INGRESOS", monto: money(datos.totalIngresos), bold: true },
+    { concepto: "TOTAL INGRESOS", monto: money(datos.totalIngresos, datos.moneda), bold: true },
   ];
 
   const ingresosTop = y;
@@ -300,9 +309,9 @@ export async function generarPDFLiquidacion(datos: {
   y -= 16;
 
   const deduccionFilas: { concepto: string; monto: string; bold?: boolean }[] = [
-    { concepto: "Seguro Social (INSS 7%)", monto: "- " + money(datos.gravableInss) },
-    { concepto: "Impuesto sobre la renta (IR)", monto: "- " + money(datos.gravableIr) },
-    { concepto: "TOTAL DEDUCCIONES", monto: "- " + money(round2(datos.gravableInss + datos.gravableIr)), bold: true },
+    { concepto: "Seguro Social (INSS 7%)", monto: "- " + money(datos.gravableInss, datos.moneda) },
+    { concepto: "Impuesto sobre la renta (IR)", monto: "- " + money(datos.gravableIr, datos.moneda) },
+    { concepto: "TOTAL DEDUCCIONES", monto: "- " + money(round2(datos.gravableInss + datos.gravableIr), datos.moneda), bold: true },
   ];
   const deduccionesTop = y;
   deduccionFilas.forEach((f, i) => {
@@ -336,7 +345,7 @@ export async function generarPDFLiquidacion(datos: {
     borderWidth: 1,
   });
   texto("NETO A RECIBIR", colConcepto + 10, y - 20, { size: 11, bold: true, color: EMERALD });
-  textoDer(money(datos.total), tableRight - 10, y - 20, { size: 13, bold: true, color: EMERALD });
+  textoDer(money(datos.total, datos.moneda), tableRight - 10, y - 20, { size: 13, bold: true, color: EMERALD });
   y -= netoAlto + 28;
 
   // ---------- Constancia y firmas ----------
@@ -477,9 +486,12 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
 
   encabezadoCompleto();
 
-  let totAsignacion = 0;
-  let totDeduccion = 0;
-  let totNeto = 0;
+  // Totales por moneda — un período normalmente es todo en córdobas, pero si
+  // incluye algún colaborador en dólares (ver Employee.moneda), nunca se
+  // suma directo con los de córdobas (ver src/lib/moneda.ts).
+  const totAsignacionItems: { moneda?: string | null; monto: number }[] = [];
+  const totDeduccionItems: { moneda?: string | null; monto: number }[] = [];
+  const totNetoItems: { moneda?: string | null; monto: number }[] = [];
   let n = 0;
 
   for (const f of datos.filas) {
@@ -530,7 +542,7 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
     texto("Cargo", colLabelA, y, { size: 8, color: DIM });
     texto(f.puesto, colValA, y, { size: 9 });
     texto("Sueldo", colLabelB, y, { size: 8, color: DIM });
-    textoDer(money(f.bruto), tableRight, y, { size: 9, bold: true });
+    textoDer(money(f.bruto, f.moneda), tableRight, y, { size: 9, bold: true });
     y -= 12;
     hline(tableLeft, tableRight, y);
     y -= 14;
@@ -551,11 +563,11 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
       texto(c.nombre, colConcepto + 16, y, { size: 8.5 });
       if (c.cantidad) textoDer(c.cantidad, colCantidadRight, y, { size: 8, color: DIM });
       if (c.asignacion !== undefined) {
-        textoDer(money(c.asignacion), colAsignacionRight, y, { size: 8.5 });
+        textoDer(money(c.asignacion, f.moneda), colAsignacionRight, y, { size: 8.5 });
         subAsignacion = round2(subAsignacion + c.asignacion);
       }
       if (c.deduccion !== undefined) {
-        textoDer(money(c.deduccion), colDeduccionRight, y, { size: 8.5 });
+        textoDer(money(c.deduccion, f.moneda), colDeduccionRight, y, { size: 8.5 });
         subDeduccion = round2(subDeduccion + c.deduccion);
       }
       y -= 13;
@@ -564,19 +576,19 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
     hline(colCantidadRight + 4, tableRight, y + 3);
     y -= 2;
     texto("Totales:", colConcepto + 16, y, { size: 8.5, bold: true });
-    textoDer(money(subAsignacion), colAsignacionRight, y, { size: 8.5, bold: true });
-    textoDer(money(subDeduccion), colDeduccionRight, y, { size: 8.5, bold: true });
+    textoDer(money(subAsignacion, f.moneda), colAsignacionRight, y, { size: 8.5, bold: true });
+    textoDer(money(subDeduccion, f.moneda), colDeduccionRight, y, { size: 8.5, bold: true });
     y -= 15;
 
     texto("Total neto del colaborador:", colConcepto + 16, y, { size: 9, bold: true, color: EMERALD });
-    textoDer(money(f.neto), tableRight, y, { size: 10, bold: true, color: EMERALD });
+    textoDer(money(f.neto, f.moneda), tableRight, y, { size: 10, bold: true, color: EMERALD });
     y -= 18;
     hline(tableLeft, tableRight, y, LINE, 1.4);
     y -= 22;
 
-    totAsignacion = round2(totAsignacion + subAsignacion);
-    totDeduccion = round2(totDeduccion + subDeduccion);
-    totNeto = round2(totNeto + f.neto);
+    totAsignacionItems.push({ moneda: f.moneda, monto: subAsignacion });
+    totDeduccionItems.push({ moneda: f.moneda, monto: subDeduccion });
+    totNetoItems.push({ moneda: f.moneda, monto: f.neto });
   }
 
   // ---------- Totales del período ----------
@@ -589,11 +601,11 @@ export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise
     bold: true,
   });
   textoDer(`${n} colaborador${n === 1 ? "" : "es"}`, colCantidadRight, y, { size: 8, color: DIM });
-  textoDer(money(totAsignacion), colAsignacionRight, y, { size: 9.5, bold: true });
-  textoDer(money(totDeduccion), colDeduccionRight, y, { size: 9.5, bold: true });
+  textoDer(formatTotalPorMoneda(totAsignacionItems), colAsignacionRight, y, { size: 9.5, bold: true });
+  textoDer(formatTotalPorMoneda(totDeduccionItems), colDeduccionRight, y, { size: 9.5, bold: true });
   y -= 16;
   texto("Total neto del período:", colConcepto, y, { size: 9.5, bold: true, color: EMERALD });
-  textoDer(money(totNeto), tableRight, y, { size: 11, bold: true, color: EMERALD });
+  textoDer(formatTotalPorMoneda(totNetoItems), tableRight, y, { size: 11, bold: true, color: EMERALD });
   y -= 30;
 
   if (datos.estado === "BORRADOR") {
@@ -617,6 +629,7 @@ export interface FilaListadoPago {
   cedula?: string | null;
   cuentaBancaria?: string | null;
   neto: number;
+  moneda?: string | null;
 }
 
 export interface DatosListadoPagoPDF {
@@ -712,7 +725,8 @@ export async function generarPDFListadoPago(datos: DatosListadoPagoPDF): Promise
 
   encabezado(true);
 
-  let totalNeto = 0;
+  // Totales por moneda — ver comentario equivalente en generarPDFPreplanilla.
+  const totalNetoItems: { moneda?: string | null; monto: number }[] = [];
   let n = 0;
   const filaTopInicial = y + filaAlto - 4;
   let filaTop = filaTopInicial;
@@ -729,9 +743,9 @@ export async function generarPDFListadoPago(datos: DatosListadoPagoPDF): Promise
     texto(f.nombre, colNombre, y, { size: 8.5 });
     texto(f.cedula || "—", colCedula, y, { size: 8.5 });
     texto(f.cuentaBancaria || "—", colCuenta, y, { size: 8.5 });
-    textoDer(money(f.neto), colNetoRight, y, { size: 8.5, bold: true });
+    textoDer(money(f.neto, f.moneda), colNetoRight, y, { size: 8.5, bold: true });
     y -= filaAlto;
-    totalNeto = round2(totalNeto + f.neto);
+    totalNetoItems.push({ moneda: f.moneda, monto: f.neto });
   }
 
   hline(tableLeft, tableRight, y + filaAlto - 4, INK, 1);
@@ -739,7 +753,7 @@ export async function generarPDFListadoPago(datos: DatosListadoPagoPDF): Promise
 
   if (y < margin + 40) nuevaPagina();
   texto(`TOTAL — ${n} colaborador${n === 1 ? "" : "es"}`, colNombre, y, { size: 9.5, bold: true });
-  textoDer(money(totalNeto), colNetoRight, y, { size: 10.5, bold: true, color: EMERALD });
+  textoDer(formatTotalPorMoneda(totalNetoItems), colNetoRight, y, { size: 10.5, bold: true, color: EMERALD });
 
   return pdf.save();
 }

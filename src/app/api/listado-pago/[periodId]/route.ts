@@ -31,6 +31,7 @@ export async function GET(_req: Request, { params }: { params: { periodId: strin
       cedula: ps.employee.cedula,
       cuentaBancaria: ps.employee.cuentaBancaria,
       neto: Number(ps.netPay),
+      moneda: ps.moneda,
     })),
   });
 

@@ -21,8 +21,17 @@ export default async function InicioPage() {
 
   const hoy = new Date();
   const exentoIR = esExentoIR(company?.regimenFiscal);
-  const totalBruto = employees.reduce((a, e) => a + Number(e.grossSalary), 0);
-  const rows = employees.map((e) =>
+  // Este panel es un ESTIMADO en córdobas de lo que toca pagar/retener el
+  // próximo mes — no una corrida real de planilla, así que no tiene un tipo
+  // de cambio del día para convertir a un colaborador en dólares (Employee.
+  // moneda). Para no mezclar córdobas con dólares en una sola cifra (ver
+  // src/lib/moneda.ts), estos totales SOLO incluyen a los colaboradores en
+  // córdobas — los que están en USD se avisan aparte abajo, y su cálculo
+  // real (con tipo de cambio) sale al correr su planilla de verdad.
+  const employeesUsd = employees.filter((e) => e.moneda === "USD");
+  const employeesNio = employees.filter((e) => e.moneda !== "USD");
+  const totalBruto = employeesNio.reduce((a, e) => a + Number(e.grossSalary), 0);
+  const rows = employeesNio.map((e) =>
     calcularPeriodo({
       bruto: Number(e.grossSalary),
       antiguedadMeses: mesesEntre(new Date(e.startDate), hoy),
@@ -31,7 +40,7 @@ export default async function InicioPage() {
       acumulaPrestaciones: e.acumulaPrestaciones,
     })
   );
-  const hayServiciosProfesionales = employees.some((e) => e.tipoContrato === "SERVICIOS_PROFESIONALES");
+  const hayServiciosProfesionales = employeesNio.some((e) => e.tipoContrato === "SERVICIOS_PROFESIONALES");
   const totalDeducciones = rows.reduce((a, d) => a + d.inssLaboral + d.irMensual, 0);
   const totalNeto = rows.reduce((a, d) => a + d.netoPagar, 0);
   const totalProvisiones = rows.reduce(
@@ -43,7 +52,7 @@ export default async function InicioPage() {
   // colaborador de servicios profesionales no cuenta ni para la base de
   // cálculo ni para el umbral de 50 trabajadores (Art. 1, Ley de Seguridad
   // Social: aplica a la relación de trabajo subordinada).
-  const empleadosLaborales = employees.filter((e) => e.tipoContrato !== "SERVICIOS_PROFESIONALES");
+  const empleadosLaborales = employeesNio.filter((e) => e.tipoContrato !== "SERVICIOS_PROFESIONALES");
   const totalBrutoLaboral = empleadosLaborales.reduce((a, e) => a + Number(e.grossSalary), 0);
   const costoPatronal = costoPatronalMensual(totalBrutoLaboral, empleadosLaborales.length);
   const tasaPatronal = inssPatronalRate(empleadosLaborales.length);
@@ -64,8 +73,14 @@ export default async function InicioPage() {
       <h1 className="font-serif text-3xl font-semibold mb-1">{company?.name ?? "Tu negocio"}</h1>
       <div className="text-inkfaint text-xs font-mono mb-8">
         {employees.length} colaboradores activos
-        {hayServiciosProfesionales && ` (${empleadosLaborales.length} laboral · ${employees.length - empleadosLaborales.length} servicios profesionales)`}
+        {hayServiciosProfesionales && ` (${empleadosLaborales.length} laboral · ${employeesNio.length - empleadosLaborales.length} servicios profesionales)`}
         {" "}· {etiquetaRegimen(company?.regimenFiscal)}
+        {employeesUsd.length > 0 && (
+          <span className="text-gold">
+            {" "}· {employeesUsd.length} en dólares (no incluido{employeesUsd.length === 1 ? "" : "s"} en los
+            estimados de abajo)
+          </span>
+        )}
       </div>
 
       {ultimoBorrador && (
@@ -93,7 +108,7 @@ export default async function InicioPage() {
         <Stat label="Neto a pagar" value={money(totalNeto)} />
       </div>
 
-      {employees.length > 0 && (
+      {employeesNio.length > 0 && (
         <div className="mb-10">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-1">
             <h2 className="font-serif text-xl font-semibold">Lo que debes pagar el próximo mes</h2>
@@ -145,7 +160,14 @@ export default async function InicioPage() {
             </div>
           </div>
           <div className="text-inkfaint text-xs mt-3">
-            Estimado según tus {employees.length} colaborador{employees.length === 1 ? "" : "es"} activo{employees.length === 1 ? "" : "s"} — confirma fechas límite y montos exactos con tu contador antes de pagar.
+            Estimado según tus {employeesNio.length} colaborador{employeesNio.length === 1 ? "" : "es"} activo{employeesNio.length === 1 ? "" : "s"} en córdobas — confirma fechas límite y montos exactos con tu contador antes de pagar.
+            {employeesUsd.length > 0 && (
+              <>
+                {" "}
+                No incluye a {employeesUsd.length} colaborador{employeesUsd.length === 1 ? "" : "es"} en dólares — su INSS/IR real (ya convertido a córdobas) sale al correr su planilla en{" "}
+                <Link href="/dashboard/nomina" className="text-gold">Correr nómina</Link>, con el tipo de cambio del día.
+              </>
+            )}
           </div>
         </div>
       )}

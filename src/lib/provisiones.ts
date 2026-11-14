@@ -205,10 +205,17 @@ export interface DesgloseRetencion {
  * plataforma no lleva ese acumulado interanual. Un contador debe confirmar
  * el cálculo antes de liquidar un caso real.
  */
+/**
+ * `tipoCambio`: igual que en calcularIR() — solo para un colaborador en
+ * USD (Employee.moneda), para ubicar el tramo de la Tabla de IR (en
+ * córdobas) antes de convertir el impuesto de vuelta a dólares. Ver el
+ * comentario de calcularIR() en src/lib/payroll.ts.
+ */
 export function calcularRetencionIndependiente(
   bruto: number,
   exentoIR: boolean = false,
-  tipoContrato: TipoContratoKey = "LABORAL"
+  tipoContrato: TipoContratoKey = "LABORAL",
+  tipoCambio?: number
 ): DesgloseRetencion {
   if (bruto <= 0) {
     return { bruto: 0, inss: 0, ir: 0, neto: 0 };
@@ -216,13 +223,14 @@ export function calcularRetencionIndependiente(
   if (tipoContrato === "SERVICIOS_PROFESIONALES") {
     // Mismo criterio que calcularPeriodo(): sin INSS, retención fija del
     // 10% en vez de la tabla progresiva (ver RETENCION_SERVICIOS_PROFESIONALES).
+    // Al ser un porcentaje fijo, no depende de convertir nada a córdobas.
     // exentoIR (Cuota Fija) también exonera esto — ver el comentario en
     // calcularPeriodo() sobre por qué un negocio en Cuota Fija no actúa como
     // agente retenedor de servicios profesionales.
     const ir = exentoIR ? 0 : round2(bruto * RETENCION_SERVICIOS_PROFESIONALES);
     return { bruto: round2(bruto), inss: 0, ir, neto: round2(bruto - ir) };
   }
-  const d = calcularIR(bruto, exentoIR);
+  const d = calcularIR(bruto, exentoIR, tipoCambio);
   return { bruto: round2(bruto), inss: d.inssLaboral, ir: d.irMensual, neto: d.neto };
 }
 
@@ -281,7 +289,11 @@ export async function calcularLiquidacion(
   pagosPendientes: PagoPendienteItem[] = [],
   horasExtraCantidad: number = 0,
   exentoIR: boolean = false,
-  tipoContrato: TipoContratoKey = "LABORAL"
+  tipoContrato: TipoContratoKey = "LABORAL",
+  // Tipo de cambio (córdobas por 1 dólar) — solo necesario si el colaborador
+  // está en USD (Employee.moneda); ver calcularRetencionIndependiente() y el
+  // comentario de calcularIR() en src/lib/payroll.ts.
+  tipoCambio?: number
 ): Promise<DesgloseLiquidacion> {
   const balance = await balanceProvisiones(employeeId, terminatedAt);
   // La elegibilidad depende del motivo de la baja — ver aplicaIndemnizacionPorTipo().
@@ -299,7 +311,7 @@ export async function calcularLiquidacion(
     pagosPendientes.reduce((a, p) => a + Math.max(p.monto, 0), 0)
   );
   const gravableBruto = round2(balance.vacacionesSaldo + horasExtraMonto + pagoPendienteBrutoTotal);
-  const gravable = calcularRetencionIndependiente(gravableBruto, exentoIR, tipoContrato);
+  const gravable = calcularRetencionIndependiente(gravableBruto, exentoIR, tipoContrato, tipoCambio);
 
   const totalIngresos = round2(balance.aguinaldoSaldo + gravableBruto + indemnizacion);
   const total = round2(balance.aguinaldoSaldo + indemnizacion + gravable.neto);

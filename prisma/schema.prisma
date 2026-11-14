@@ -137,6 +137,15 @@ model Employee {
   // Ver comentario de TipoContrato arriba — cambia por completo el cálculo.
   tipoContrato TipoContrato @default(LABORAL)
 
+  // NIO (córdobas, por defecto) o USD (dólares) — en qué moneda está
+  // `grossSalary` y en qué moneda se le paga a este colaborador. El INSS y
+  // el IR son obligaciones de ley en córdobas sin importar esto (Art. 23,
+  // Ley 822 usa tramos en C$) — para un colaborador USD, calcularPeriodo()
+  // en src/lib/payroll.ts convierte internamente con el tipo de cambio que
+  // se indica al correr esa planilla, y vuelve a convertir el resultado a
+  // dólares para que el neto a pagar quede en la misma moneda del salario.
+  moneda String @default("NIO")
+
   // Si este colaborador acumula aguinaldo/vacaciones/indemnización dentro de
   // Ceiba. Para SERVICIOS_PROFESIONALES este campo se ignora: NUNCA acumula,
   // sin importar lo que tenga guardado (ver calcularPeriodo en payroll.ts).
@@ -165,12 +174,13 @@ model PayrollPeriod {
   label      String
   status     String     @default("BORRADOR") // BORRADOR (pendiente de aprobación) | APROBADA (final)
   tipo       TipoPeriodo @default(NOMINA)
-  // MENSUAL (por defecto) | QUINCENAL — ver calcularPeriodo() en
+  // MENSUAL (por defecto) | QUINCENAL | SEMANAL — ver calcularPeriodo() en
   // src/lib/payroll.ts. "Salario mensual" en Colaboradores/Excel SIEMPRE es
-  // el salario de referencia completo; cuando el período es QUINCENAL, el
-  // motor de cálculo prorratea solo la base salarial (mitad) y las
-  // provisiones (mitad), recalculando el IR sobre una proyección anual de
-  // 24 quincenas en vez de 12 meses — no hay que dividir el salario a mano.
+  // el salario de referencia completo; cuando el período es QUINCENAL o
+  // SEMANAL, el motor de cálculo prorratea solo la base salarial y las
+  // provisiones (15/30 o 7/30 del mes), recalculando el IR sobre una
+  // proyección anual de 24 quincenas o 52 semanas en vez de 12 meses — no
+  // hay que dividir el salario a mano.
   periodicidad String   @default("MENSUAL")
   createdAt  DateTime   @default(now())
   approvedAt DateTime?
@@ -223,6 +233,16 @@ model Payslip {
   inssLaboral    Decimal       @db.Decimal(12, 2)
   irMensual      Decimal       @db.Decimal(12, 2)
   netPay         Decimal       @db.Decimal(12, 2)
+  // Moneda del colaborador AL MOMENTO de calcular este comprobante (copia de
+  // Employee.moneda — queda fijo aunque luego cambie la moneda del
+  // colaborador, igual que el resto del comprobante no se recalcula). NIO
+  // por defecto para no afectar comprobantes ya existentes.
+  moneda         String        @default("NIO")
+  // Tipo de cambio (córdobas por 1 dólar) usado para convertir a córdobas al
+  // calcular el INSS/IR de este comprobante — solo cuando moneda es USD;
+  // null en comprobantes en córdobas. Se guarda para que el comprobante
+  // quede como constancia fija, aunque el tipo de cambio cambie después.
+  tipoCambioAplicado Decimal?  @db.Decimal(10, 4)
   createdAt      DateTime      @default(now())
 }
 
@@ -301,6 +321,11 @@ model Liquidacion {
 
   totalIngresos        Decimal         @default(0) @db.Decimal(12, 2) // aguinaldo + vacaciones + indemnización + pagos pendientes, todo bruto
   total                Decimal         @db.Decimal(12, 2) // lo que de verdad se le paga (neto)
+  // Moneda del colaborador al momento de la baja (copia de Employee.moneda)
+  // y, si era USD, el tipo de cambio usado para calcular el IR de esta
+  // liquidación — ver comentario de Payslip.moneda/tipoCambioAplicado.
+  moneda               String          @default("NIO")
+  tipoCambioAplicado   Decimal?        @db.Decimal(10, 4)
   note                 String?
   createdAt            DateTime        @default(now())
 }

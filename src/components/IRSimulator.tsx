@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { calcularPeriodo } from "@/lib/payroll";
+import { formatMonto } from "@/lib/moneda";
 
 export default function IRSimulator() {
   const [salario, setSalario] = useState(9200);
@@ -12,6 +13,8 @@ export default function IRSimulator() {
   const [exentoIR, setExentoIR] = useState(false);
   const [tipoContrato, setTipoContrato] = useState<"LABORAL" | "SERVICIOS_PROFESIONALES">("LABORAL");
   const [acumulaPrestaciones, setAcumulaPrestaciones] = useState(true);
+  const [moneda, setMoneda] = useState<"NIO" | "USD">("NIO");
+  const [tipoCambio, setTipoCambio] = useState(36.62);
 
   const d = calcularPeriodo({
     bruto: salario || 0,
@@ -23,16 +26,19 @@ export default function IRSimulator() {
     exentoIR,
     tipoContrato,
     acumulaPrestaciones,
+    moneda,
+    tipoCambio: moneda === "USD" ? tipoCambio || undefined : undefined,
   });
+  const money = (n: number) => formatMonto(n, moneda);
 
   return (
     <div>
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-3">
-        <NumField label="Salario bruto (C$)" value={salario} onChange={setSalario} />
+        <NumField label={`Salario bruto (${moneda === "USD" ? "US$" : "C$"})`} value={salario} onChange={setSalario} />
         <NumField label="Horas extra" value={horas} onChange={setHoras} step={0.5} />
-        <NumField label="Comisiones (C$)" value={comisiones} onChange={setComisiones} />
-        <NumField label="Retroactivos (C$)" value={retroactivos} onChange={setRetroactivos} />
-        <NumField label="Viáticos (C$)" value={viaticos} onChange={setViaticos} />
+        <NumField label="Comisiones" value={comisiones} onChange={setComisiones} />
+        <NumField label="Retroactivos" value={retroactivos} onChange={setRetroactivos} />
+        <NumField label="Viáticos" value={viaticos} onChange={setViaticos} />
         <NumField label="Antigüedad (meses)" value={antiguedadMeses} onChange={setAntiguedadMeses} />
       </div>
       <div className="flex flex-wrap items-center gap-4 mb-5">
@@ -47,6 +53,20 @@ export default function IRSimulator() {
             <option value="SERVICIOS_PROFESIONALES">Servicios profesionales</option>
           </select>
         </div>
+        <div>
+          <label className="block text-xs text-inkdim mb-1.5">Moneda</label>
+          <select
+            value={moneda}
+            onChange={(e) => setMoneda(e.target.value as "NIO" | "USD")}
+            className="bg-[#12181a] border border-linestrong rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="NIO">Córdobas (C$)</option>
+            <option value="USD">Dólares (US$)</option>
+          </select>
+        </div>
+        {moneda === "USD" && (
+          <NumField label="Tipo de cambio (C$ por US$)" value={tipoCambio} onChange={setTipoCambio} step={0.0001} />
+        )}
         <label className="flex items-center gap-2 text-xs text-inkdim">
           <input type="checkbox" checked={exentoIR} onChange={(e) => setExentoIR(e.target.checked)} />
           Simular negocio en régimen Cuota Fija (no se calcula IR laboral ni retención de servicios profesionales)
@@ -61,6 +81,14 @@ export default function IRSimulator() {
           Acumula prestaciones (aguinaldo/vacaciones/antigüedad)
         </label>
       </div>
+      {moneda === "USD" && (
+        <p className="text-inkfaint text-xs mb-4">
+          El INSS (7% fijo) y la retención de servicios profesionales (10% fijo) no necesitan tipo de cambio — una
+          tasa fija de un monto en dólares ya es correcta en dólares. El IR laboral sí lo necesita, porque la tabla
+          de tramos (Art. 23, Ley 822) está en córdobas: se usa solo para ubicar el tramo correcto, el impuesto
+          resultante se convierte de vuelta a dólares antes de restarlo.
+        </p>
+      )}
       <table className="w-full text-sm">
         <tbody>
           <Row label="Salario bruto" value={money(d.bruto)} />
@@ -81,7 +109,10 @@ export default function IRSimulator() {
               <Row label="INSS laboral (7%)" value={"− " + money(d.inssLaboral)} />
               <Row label="Base imponible mensual" value={money(d.baseImponibleMensual)} />
               <Row label="Expectativa de renta anual (× 12)" value={money(d.expectativaAnual)} />
-              <Row label="Tramo aplicable (Art. 23, Ley 822)" value={`hasta ${d.tramo.hasta === Infinity ? "∞" : money(d.tramo.hasta)}, ${(d.tramo.tasa * 100).toFixed(0)}%`} />
+              <Row
+                label={`Tramo aplicable (Art. 23, Ley 822)${moneda === "USD" ? " — tramos siempre en córdobas" : ""}`}
+                value={`hasta ${d.tramo.hasta === Infinity ? "∞" : formatMonto(d.tramo.hasta, "NIO")}, ${(d.tramo.tasa * 100).toFixed(0)}%`}
+              />
               <Row label={exentoIR ? "IR mensual a retener (exento — Cuota Fija)" : "IR mensual a retener"} value={"− " + money(d.irMensual)} />
             </>
           )}
@@ -126,8 +157,4 @@ function Row({ label, value }: { label: string; value: string }) {
       <td className="py-2 text-right font-mono">{value}</td>
     </tr>
   );
-}
-
-function money(n: number) {
-  return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }

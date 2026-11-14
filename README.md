@@ -260,23 +260,24 @@ colaboradores nuevos como Laboral, acumulando) — para un colaborador que ya
 exista, respeta lo que tenga configurado. Si quieres que la plantilla de
 Excel también traiga el tipo de contrato, dime y se lo agrego.
 
-## Periodicidad: Mensual o Quincenal
+## Periodicidad: Mensual, Quincenal o Semanal
 
 Al correr nómina (a mano o por Excel) eliges la **periodicidad** del
-período: Mensual (de siempre) o Quincenal. El salario que tienes guardado en
-Colaboradores — o el que pongas en la columna "Salario mensual (C$)" del
-Excel — **siempre es el salario mensual completo de referencia, nunca lo
-dividas tú mismo**. Si eliges Quincenal, Ceiba:
+período: Mensual (de siempre), Quincenal o Semanal. El salario que tienes
+guardado en Colaboradores — o el que pongas en la columna "Salario mensual
+(C$)" del Excel — **siempre es el salario mensual completo de referencia,
+nunca lo dividas tú mismo**. Si eliges Quincenal o Semanal, Ceiba:
 
-- Paga la mitad de ese salario de referencia en este período.
-- Calcula el INSS laboral sobre esa mitad.
-- Proyecta el IR sobre 24 quincenas al año en vez de 12 meses (en vez de
-  dividir entre 12, divide entre 24) — así la tabla progresiva del Art. 23
-  sigue aplicándose correctamente sobre el verdadero ingreso anual del
-  colaborador, no sobre el doble.
-- Acumula la mitad de aguinaldo/vacaciones/antigüedad de ese período (para
-  que sumando las dos quincenas de un mes te dé la misma provisión mensual
-  de siempre).
+- Paga la parte proporcional de ese salario de referencia en este período
+  (15/30 para Quincenal, 7/30 para Semanal).
+- Calcula el INSS laboral sobre esa parte.
+- Proyecta el IR sobre 24 quincenas o 52 semanas al año en vez de 12 meses
+  (en vez de dividir entre 12, divide entre 24 o 52) — así la tabla
+  progresiva del Art. 23 sigue aplicándose correctamente sobre el verdadero
+  ingreso anual del colaborador, no sobre el doble o el cuádruple.
+- Acumula la parte proporcional de aguinaldo/vacaciones/antigüedad de ese
+  período (para que sumando los períodos de un mes te dé la misma provisión
+  mensual de siempre).
 
 Horas extra, comisiones, retroactivos, viáticos y otras deducciones **no se
 tocan** — esos campos ya se piden como el monto de ese período específico,
@@ -287,6 +288,58 @@ hora, no cambia por cuántas veces al mes pagues.
 
 Mensual sigue siendo el valor por defecto en ambos formularios, y su cálculo
 no cambió en nada con esta función.
+
+### Correr una planilla separada para solo algunos colaboradores
+
+En "Generar preplanilla a mano", cada fila de la tabla trae una casilla
+**"Incluir"** marcada por defecto. Esto te deja correr una planilla
+**aparte** para un colaborador con una periodicidad distinta al resto (por
+ejemplo, uno que se paga semanal mientras los demás son mensuales): desmarca
+a todos los demás, corre esa planilla solo para él con "Semanal", y luego
+corre otra planilla normal para el resto con "Mensual" o "Quincenal". Nada
+te obliga a hacerlo así — puedes dejarlos a todos marcados, como siempre,
+para correr una sola planilla conjunta. Esta casilla solo existe en el
+formulario a mano; la carga por Excel siempre incluye a todos los que vengan
+en el archivo.
+
+---
+
+## Colaboradores en dólares (USD)
+
+Cada colaborador tiene una **moneda** (Córdobas o Dólares), configurable al
+agregarlo o después desde su página de detalle (sección "Moneda"). Cuando
+un colaborador está en dólares, su salario, horas extra, comisiones,
+viáticos, provisiones y neto a pagar quedan **todos en dólares** — Ceiba
+nunca mezcla un monto en córdobas con uno en dólares en una misma cifra; en
+vistas donde aparecen colaboradores de ambas monedas (Históricos, Inicio),
+los totales se muestran agrupados por moneda (ej. "C$ 45,000.00 + US$
+800.00") en vez de sumarse entre sí.
+
+El INSS laboral (7% fijo) y la retención de servicios profesionales (10%
+fijo) son porcentajes planos, así que se calculan igual sin importar la
+moneda — el 7% de un monto en dólares ya es correcto en dólares, no hay
+nada que convertir. El **IR laboral** es distinto: la tabla progresiva del
+Art. 23 (Ley 822) usa tramos fijados **en córdobas**, así que para saber en
+qué tramo cae el ingreso anual de un colaborador en dólares hay que
+convertirlo a córdobas primero. Por eso, cada vez que corras una planilla
+(a mano o por Excel), calcules una liquidación, o des de baja a un
+colaborador en dólares, Ceiba te va a pedir el **tipo de cambio del día**
+(córdobas por 1 dólar) — es obligatorio en esos casos, nunca se inventa un
+valor. Con ese tipo de cambio, Ceiba ubica el tramo correcto en córdobas,
+calcula el impuesto, y lo convierte de vuelta a dólares antes de restarlo
+del salario — el colaborador sigue viendo todo en dólares en su
+comprobante.
+
+La plantilla de Excel no tiene columna de moneda: un colaborador se sube o
+actualiza siempre con la moneda que **ya tenga configurada** en
+Colaboradores (igual que ya pasa con el tipo de contrato). Para subir a
+alguien en dólares por Excel, configúralo primero en Colaboradores
+(Moneda: Dólares) y luego cárgalo con la plantilla de siempre.
+
+En la lista de Colaboradores, la tabla de referencia muestra "—" en las
+columnas de IR y Neto para un colaborador en dólares, porque esa tabla no
+tiene un tipo de cambio del día con el que calcular esas dos cifras de
+forma confiable — el cálculo real sale siempre al correr su planilla.
 
 ---
 

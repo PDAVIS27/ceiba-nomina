@@ -9,6 +9,7 @@ import {
   generarEnlaceAprobacion,
   actualizarCorreoAvisoAprobacion,
 } from "@/app/dashboard/actions";
+import { formatMonto, formatTotalPorMoneda } from "@/lib/moneda";
 
 // El envío por correo (enviarPlanillaPorCorreo, en actions.ts) se deja de
 // mostrar aquí por el momento — el negocio pidió usar enlaces para
@@ -83,19 +84,39 @@ export default async function HistoricosPage({
   }
   const anios = Array.from(porAnio.keys()).sort((a, b) => b - a);
 
+  // Neto de un período, SOLO en córdobas — para la gráfica de barras y los
+  // acumulados que necesitan un número comparable en una sola escala. Un
+  // período con algún colaborador en dólares (Employee.moneda) también
+  // acumula ese neto aparte (ver netoUsdDePeriodo) — nunca se suman juntos
+  // (ver src/lib/moneda.ts).
   const netoDePeriodo = (p: (typeof periods)[number]) =>
-    p.payslips.reduce((acc, ps) => acc + Number(ps.netPay), 0);
+    p.payslips.filter((ps) => ps.moneda !== "USD").reduce((acc, ps) => acc + Number(ps.netPay), 0);
+  const netoUsdDePeriodo = (p: (typeof periods)[number]) =>
+    p.payslips.filter((ps) => ps.moneda === "USD").reduce((acc, ps) => acc + Number(ps.netPay), 0);
+  // Texto con el total REAL del período, agrupado por moneda (para mostrar,
+  // no para graficar) — "C$ 1,000.00" o "C$ 1,000.00 + US$ 500.00".
+  const netoTextoDePeriodo = (p: (typeof periods)[number]) =>
+    formatTotalPorMoneda(p.payslips.map((ps) => ({ moneda: ps.moneda, monto: Number(ps.netPay) })));
 
   const periodosAprobados = periods.filter((p) => p.status === "APROBADA");
-  const totalNetoHistorico = periodosAprobados.reduce((acc, p) => acc + netoDePeriodo(p), 0);
+  const totalNetoHistorico = formatTotalPorMoneda(
+    periodosAprobados.flatMap((p) => p.payslips.map((ps) => ({ moneda: ps.moneda, monto: Number(ps.netPay) })))
+  );
   const colaboradoresDistintos = new Set(periods.flatMap((p) => p.payslips.map((ps) => ps.employeeId))).size;
 
   const anioSeleccionado = selectedPeriod ? fechaDelPeriodo(selectedPeriod).getFullYear() : anios[0];
+  // La gráfica de barras de abajo es solo en córdobas (necesita una sola
+  // escala numérica) — si el año tiene algo pagado en dólares, se muestra
+  // aparte en totalUsdAnio, debajo de la gráfica.
   const totalesPorMes = Array.from({ length: 12 }, (_, mes) => {
     const delMes = (porAnio.get(anioSeleccionado)?.get(mes) ?? []).filter((p) => p.status === "APROBADA");
     return { mes, total: delMes.reduce((acc, p) => acc + netoDePeriodo(p), 0) };
   });
   const maxMes = Math.max(1, ...totalesPorMes.map((t) => t.total));
+  const totalUsdAnio = Array.from((porAnio.get(anioSeleccionado) ?? new Map()).values())
+    .flat()
+    .filter((p) => p.status === "APROBADA")
+    .reduce((acc, p) => acc + netoUsdDePeriodo(p), 0);
 
   // Mensaje de WhatsApp listo para copiar y pegar, armado alrededor del
   // mismo enlace de aprobación/confirmación (generarEnlaceAprobacion en
@@ -118,7 +139,7 @@ export default async function HistoricosPage({
             label: selectedPeriod.label,
             tipo: selectedPeriod.tipo,
             token: selectedPeriod.clientApprovalToken,
-            total: netoDePeriodo(selectedPeriod),
+            totalTexto: netoTextoDePeriodo(selectedPeriod),
             colaboradores: selectedPeriod.payslips.length,
           })
       : null;
@@ -201,7 +222,7 @@ export default async function HistoricosPage({
               label="Años de historial"
               value={anios.length === 1 ? String(anios[0]) : `${anios[anios.length - 1]}–${anios[0]}`}
             />
-            <Stat label="Neto pagado (histórico)" value={money(totalNetoHistorico)} />
+            <Stat label="Neto pagado (histórico)" value={totalNetoHistorico} />
             <Stat label="Colaboradores distintos" value={String(colaboradoresDistintos)} />
           </div>
 
@@ -227,6 +248,12 @@ export default async function HistoricosPage({
                 </div>
               ))}
             </div>
+            {totalUsdAnio > 0 && (
+              <p className="text-inkfaint text-[11px] mt-3">
+                La gráfica es solo en córdobas — este año también se pagó {formatMonto(totalUsdAnio, "USD")} a
+                colaboradores en dólares (no incluido arriba).
+              </p>
+            )}
           </div>
 
           <div className="space-y-2 mb-6">
@@ -234,9 +261,13 @@ export default async function HistoricosPage({
               const porMes = porAnio.get(anio)!;
               const meses = Array.from(porMes.keys()).sort((a, b) => b - a);
               const periodosDelAnio = meses.reduce((acc, m) => acc + porMes.get(m)!.length, 0);
-              const netoDelAnio = meses.reduce(
-                (acc, m) => acc + porMes.get(m)!.filter((p) => p.status === "APROBADA").reduce((a, p) => a + netoDePeriodo(p), 0),
-                0
+              const netoDelAnio = formatTotalPorMoneda(
+                meses.flatMap((m) =>
+                  porMes
+                    .get(m)!
+                    .filter((p) => p.status === "APROBADA")
+                    .flatMap((p) => p.payslips.map((ps) => ({ moneda: ps.moneda, monto: Number(ps.netPay) })))
+                )
               );
               return (
                 <details key={anio} open={anio === anioSeleccionado} className="bg-panel border border-line rounded-xl px-5 py-4 group">
@@ -248,7 +279,7 @@ export default async function HistoricosPage({
                       </span>
                     </div>
                     <div className="flex items-center gap-4">
-                      <span className="text-xs font-mono text-inkdim">{money(netoDelAnio)} neto pagado</span>
+                      <span className="text-xs font-mono text-inkdim">{netoDelAnio} neto pagado</span>
                       <span className="text-inkfaint text-xs group-open:rotate-180 transition-transform">▾</span>
                     </div>
                   </summary>
@@ -385,42 +416,48 @@ export default async function HistoricosPage({
                   <details key={ps.id} className="border border-line rounded-lg px-4 py-3 group">
                     <summary className="flex justify-between items-center cursor-pointer list-none">
                       <div>
-                        <div className="font-medium">{ps.employee.fullName}</div>
+                        <div className="font-medium">
+                          {ps.employee.fullName}
+                          {ps.moneda === "USD" && <span className="text-gold text-[10px] font-mono ml-1.5">USD</span>}
+                        </div>
                         <div className="text-xs text-inkfaint">{ps.employee.role}</div>
                       </div>
                       <div className="flex items-center gap-6">
                         <div className="text-right">
                           <div className="text-[10px] uppercase text-inkfaint font-mono">Neto</div>
-                          <div className="font-mono">{money(Number(ps.netPay))}</div>
+                          <div className="font-mono">{money(Number(ps.netPay), ps.moneda)}</div>
                         </div>
                         <span className="text-inkfaint text-xs group-open:rotate-180 transition-transform">▾</span>
                       </div>
                     </summary>
                     {selectedPeriod.tipo === "AGUINALDO" ? (
                       <div className="mt-4 pt-4 border-t border-line grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
-                        <Detalle label="Aguinaldo pagado (exento de INSS/IR)" value={money(Number(ps.grossSalary))} />
-                        <Detalle label="Neto pagado" value={money(Number(ps.netPay))} bold />
+                        <Detalle label="Aguinaldo pagado (exento de INSS/IR)" value={money(Number(ps.grossSalary), ps.moneda)} />
+                        <Detalle label="Neto pagado" value={money(Number(ps.netPay), ps.moneda)} bold />
                       </div>
                     ) : (
                       <div className="mt-4 pt-4 border-t border-line grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
-                        <Detalle label="Salario bruto" value={money(Number(ps.grossSalary))} />
-                        <Detalle label="Horas extra" value={`${Number(ps.horasExtraCantidad)} h · ${money(Number(ps.horasExtraMonto))}`} />
-                        <Detalle label="Comisiones" value={money(Number(ps.comisiones))} />
-                        <Detalle label="Retroactivos" value={money(Number(ps.retroactivos))} />
-                        <Detalle label="Viáticos (no gravable)" value={money(Number(ps.viaticos))} />
-                        <Detalle label="INSS laboral (7%)" value={"− " + money(Number(ps.inssLaboral))} />
-                        <Detalle label="IR retenido" value={"− " + money(Number(ps.irMensual))} />
+                        {ps.moneda === "USD" && ps.tipoCambioAplicado && (
+                          <Detalle label="Tipo de cambio aplicado" value={`C$ ${Number(ps.tipoCambioAplicado).toFixed(4)} por US$1`} />
+                        )}
+                        <Detalle label="Salario bruto" value={money(Number(ps.grossSalary), ps.moneda)} />
+                        <Detalle label="Horas extra" value={`${Number(ps.horasExtraCantidad)} h · ${money(Number(ps.horasExtraMonto), ps.moneda)}`} />
+                        <Detalle label="Comisiones" value={money(Number(ps.comisiones), ps.moneda)} />
+                        <Detalle label="Retroactivos" value={money(Number(ps.retroactivos), ps.moneda)} />
+                        <Detalle label="Viáticos (no gravable)" value={money(Number(ps.viaticos), ps.moneda)} />
+                        <Detalle label="INSS laboral (7%)" value={"− " + money(Number(ps.inssLaboral), ps.moneda)} />
+                        <Detalle label="IR retenido" value={"− " + money(Number(ps.irMensual), ps.moneda)} />
                         {Number(ps.otrasDeducciones) > 0 && (
                           <Detalle
                             label={ps.otrasDeduccionesConcepto || "Otras deducciones"}
-                            value={"− " + money(Number(ps.otrasDeducciones))}
+                            value={"− " + money(Number(ps.otrasDeducciones), ps.moneda)}
                           />
                         )}
-                        <Detalle label="Neto a pagar" value={money(Number(ps.netPay))} bold />
-                        <Detalle label="Provisión aguinaldo" value={money(Number(ps.provisionAguinaldo))} />
-                        <Detalle label="Provisión vacaciones" value={money(Number(ps.provisionVacaciones))} />
-                        <Detalle label="Provisión indemnización" value={money(Number(ps.provisionIndemnizacion))} />
-                        <Detalle label="Total provisiones del mes" value={money(provisiones)} bold />
+                        <Detalle label="Neto a pagar" value={money(Number(ps.netPay), ps.moneda)} bold />
+                        <Detalle label="Provisión aguinaldo" value={money(Number(ps.provisionAguinaldo), ps.moneda)} />
+                        <Detalle label="Provisión vacaciones" value={money(Number(ps.provisionVacaciones), ps.moneda)} />
+                        <Detalle label="Provisión indemnización" value={money(Number(ps.provisionIndemnizacion), ps.moneda)} />
+                        <Detalle label="Total provisiones del mes" value={money(provisiones, ps.moneda)} bold />
                       </div>
                     )}
                     <a
@@ -458,8 +495,8 @@ function Detalle({ label, value, bold }: { label: string; value: string; bold?: 
   );
 }
 
-function money(n: number) {
-  return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function money(n: number, moneda?: string | null) {
+  return formatMonto(n, moneda);
 }
 
 // Mismo criterio que obtenerOCrearEnlaceAprobacion() en actions.ts — arma la
@@ -491,14 +528,14 @@ function mensajeConfirmacionAprobada(p: {
   label: string;
   tipo: string;
   token: string;
-  total: number;
+  totalTexto: string;
   colaboradores: number;
 }): string {
   const que = p.tipo === "AGUINALDO" ? "la nómina de aguinaldo" : "la nómina";
   const plural = p.colaboradores === 1 ? "" : "es";
   return `Buen día. Gracias por su confirmación. Se comparte ${que} aprobada del período ${p.label} de ${
     p.empresa
-  }. Total a pagar: ${money(p.total)} a ${p.colaboradores} colaborador${plural}. Puede verla aquí: ${enlaceAprobacionDe(
+  }. Total a pagar: ${p.totalTexto} a ${p.colaboradores} colaborador${plural}. Puede verla aquí: ${enlaceAprobacionDe(
     p.token
   )}\n\n${CIERRE_CORPORATIVO}`;
 }

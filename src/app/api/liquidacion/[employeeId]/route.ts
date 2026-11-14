@@ -43,6 +43,7 @@ export async function GET(_req: Request, { params }: { params: { employeeId: str
     gravableIr: Number(liq.gravableIr),
     totalIngresos: Number(liq.totalIngresos),
     total: Number(liq.total),
+    moneda: liq.moneda,
   });
 
   const filename = `liquidacion-${employee.fullName.replace(/[^a-z0-9]+/gi, "-")}.pdf`;

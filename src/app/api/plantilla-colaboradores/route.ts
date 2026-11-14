@@ -27,6 +27,7 @@ export async function GET() {
     ["Retroactivos (C$)", "Monto retroactivo del período — se suma a la base gravable."],
     ["Otras deducciones (C$)", "Opcional. Descuento que decide tu negocio y no es de ley (error de pago, falta, llegada tardía, etc.) — se resta directo del neto a pagar, no afecta el INSS ni el IR."],
     ["Motivo de otras deducciones", "Opcional. Explica de qué se trata el monto de la columna anterior (ej. \"Descuento por falta el 3 de junio\"). Si dejas el monto en cero, este campo se ignora."],
+    ["¿Colaborador en dólares?", "Esta hoja no tiene columna de moneda — los montos se interpretan en la moneda que el colaborador YA tenga configurada en Colaboradores dentro de Ceiba. Para subir a alguien que se paga en dólares, configúralo primero ahí (Moneda: Dólares) y luego súbelo por esta plantilla como siempre; Ceiba te va a pedir el tipo de cambio del día en \"Correr nómina\"."],
   ];
 
   const wb = XLSX.utils.book_new();

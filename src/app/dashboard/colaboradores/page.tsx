@@ -5,6 +5,7 @@ import { calcularPeriodo } from "@/lib/payroll";
 import { mesesEntre } from "@/lib/dateUtils";
 import { esExentoIR } from "@/lib/regimenFiscal";
 import { TERMINATION_LABELS } from "@/lib/provisiones";
+import { formatMonto } from "@/lib/moneda";
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
 import TipoContratoYPrestaciones from "@/components/TipoContratoYPrestaciones";
@@ -29,6 +30,12 @@ export default async function ColaboradoresPage() {
   });
 
   const hoy = new Date();
+  // Esta tabla es solo de REFERENCIA (no una corrida real), así que para un
+  // colaborador en dólares no hay un tipo de cambio del día para calcular
+  // bien el IR (ver calcularIR() en src/lib/payroll.ts) — se calcula igual
+  // (sale en 0 al no convertir nada) pero se muestra como "—" en la tabla,
+  // con una nota, para no dar una cifra que parezca exacta sin serlo. El
+  // INSS sí es confiable sin tipo de cambio (tasa fija, no por tramos).
   const rows = employees.map((e) => ({
     e,
     d: calcularPeriodo({
@@ -37,6 +44,7 @@ export default async function ColaboradoresPage() {
       exentoIR,
       tipoContrato: e.tipoContrato,
       acumulaPrestaciones: e.acumulaPrestaciones,
+      moneda: e.moneda === "USD" ? "USD" : "NIO",
     }),
   }));
 
@@ -51,7 +59,14 @@ export default async function ColaboradoresPage() {
           <Field name="cedula" label="N° de cédula (opcional)" placeholder="001-010190-0001A" required={false} />
           <Field name="cuentaBancaria" label="Cuenta bancaria (opcional)" placeholder="10012345678" required={false} />
           <Field name="role" label="Puesto / Departamento" placeholder="Ej. Cajera" />
-          <Field name="grossSalary" label="Salario bruto (C$)" type="number" placeholder="9200" />
+          <div>
+            <label className="block text-xs text-inkdim mb-1.5">Moneda</label>
+            <select name="moneda" defaultValue="NIO" className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
+              <option value="NIO">Córdobas (C$)</option>
+              <option value="USD">Dólares (US$)</option>
+            </select>
+          </div>
+          <Field name="grossSalary" label="Salario bruto" type="number" placeholder="9200" />
           <Field name="startDate" label="Fecha de ingreso" type="date" />
           <TipoContratoYPrestaciones defaultTipoContrato="LABORAL" defaultAcumulaPrestaciones={true} />
           <SubmitButton className="px-5 py-3 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium">
@@ -66,7 +81,11 @@ export default async function ColaboradoresPage() {
           actívala a mano si, en la práctica, sí le reconoces aguinaldo/vacaciones/antigüedad a ese colaborador. Por
           defecto se le retiene un 10% fijo (Art. 44 Reglamento Ley 822), salvo que el negocio esté registrado como
           <strong> Cuota Fija</strong>, caso en el que no se retiene nada — el Art. 259 de la Ley 822 exonera a estos
-          negocios de hacer retenciones de IR (ver Régimen fiscal en el panel de proveedor).
+          negocios de hacer retenciones de IR (ver Régimen fiscal en el panel de proveedor). Si el colaborador se paga
+          en <strong>dólares</strong>, el INSS y el IR se calculan igual pero convertidos a córdobas con el tipo de
+          cambio que indiques al correr su planilla (la tabla de IR usa tramos en córdobas) — por eso la columna de IR
+          y Neto de abajo muestra "—" para un colaborador en USD: es solo de referencia, el cálculo real sale al
+          correr nómina.
         </p>
       </section>
 
@@ -88,7 +107,10 @@ export default async function ColaboradoresPage() {
             {rows.map(({ e, d }) => (
               <tr key={e.id} className="border-b border-line">
                 <td className="py-3">
-                  <div className="font-medium">{e.fullName}</div>
+                  <div className="font-medium">
+                    {e.fullName}
+                    {e.moneda === "USD" && <span className="text-gold text-[10px] font-mono ml-1.5">USD</span>}
+                  </div>
                   <div className="text-xs text-inkfaint">
                     {e.role} {e.externalCode && `· ${e.externalCode}`} {e.cedula && `· ${e.cedula}`} {e.cuentaBancaria && `· Cta. ${e.cuentaBancaria}`}
                     {d.esServiciosProfesionales && <span className="text-gold"> · Servicios profesionales</span>}
@@ -96,10 +118,25 @@ export default async function ColaboradoresPage() {
                     {d.esServiciosProfesionales && e.acumulaPrestaciones && <span className="text-emerald"> · Sí acumula prestaciones</span>}
                   </div>
                 </td>
-                <td className="py-3 text-right font-mono">{money(d.bruto)}</td>
-                <td className="py-3 text-right font-mono">{d.esServiciosProfesionales ? "—" : money(d.inssLaboral)}</td>
-                <td className="py-3 text-right font-mono">{money(d.irMensual)}{d.esServiciosProfesionales && <span className="text-inkfaint text-[10px]"> (10%)</span>}</td>
-                <td className="py-3 text-right font-mono">{money(d.netoPagar)}</td>
+                <td className="py-3 text-right font-mono">{money(d.bruto, e.moneda)}</td>
+                <td className="py-3 text-right font-mono">{d.esServiciosProfesionales ? "—" : money(d.inssLaboral, e.moneda)}</td>
+                <td className="py-3 text-right font-mono">
+                  {e.moneda === "USD" ? (
+                    <span className="text-inkfaint" title="Solo se calcula con el tipo de cambio del día, al correr nómina">—</span>
+                  ) : (
+                    <>
+                      {money(d.irMensual, e.moneda)}
+                      {d.esServiciosProfesionales && <span className="text-inkfaint text-[10px]"> (10%)</span>}
+                    </>
+                  )}
+                </td>
+                <td className="py-3 text-right font-mono">
+                  {e.moneda === "USD" ? (
+                    <span className="text-inkfaint" title="Solo se calcula con el tipo de cambio del día, al correr nómina">—</span>
+                  ) : (
+                    money(d.netoPagar, e.moneda)
+                  )}
+                </td>
                 <td className="py-3 text-right text-xs text-inkfaint font-mono">
                   {new Date(e.startDate).toLocaleDateString("es-NI")}
                 </td>
@@ -144,7 +181,7 @@ export default async function ColaboradoresPage() {
                     {e.terminatedAt && new Date(e.terminatedAt).toLocaleDateString("es-NI")}
                   </td>
                   <td className="py-3 text-right font-mono">
-                    {e.liquidacion ? money(Number(e.liquidacion.total)) : "—"}
+                    {e.liquidacion ? money(Number(e.liquidacion.total), e.liquidacion.moneda) : "—"}
                   </td>
                   <td className="py-3 text-right">
                     <Link href={`/dashboard/colaboradores/${e.id}`} className="text-xs text-gold hover:underline">
@@ -183,6 +220,6 @@ function Field({
   );
 }
 
-function money(n: number) {
-  return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function money(n: number, moneda?: string | null) {
+  return formatMonto(n, moneda);
 }

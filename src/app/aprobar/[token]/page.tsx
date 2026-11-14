@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import SubmitButton from "@/components/SubmitButton";
 import CeibaLogo from "@/components/CeibaLogo";
 import { enviarAvisoPorCorreo } from "@/lib/email";
+import { formatTotalPorMoneda } from "@/lib/moneda";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +69,7 @@ async function avisarAprobacionPorCorreo(period: any) {
     : period.company.users.filter((u: any) => u.role === "COMPANY_OWNER").map((u: any) => u.email);
   if (destinatarios.length === 0) return;
 
-  const total = period.payslips.reduce((acc: number, ps: any) => acc + Number(ps.netPay), 0);
+  const total = formatTotalPorMoneda(period.payslips.map((ps: any) => ({ moneda: ps.moneda, monto: Number(ps.netPay) })));
   const base = (process.env.NEXTAUTH_URL || "").replace(/\/+$/, "");
   const enlaceHistoricos = `${base}/dashboard/historicos?periodo=${period.id}`;
   const que = period.tipo === "AGUINALDO" ? "la nómina de aguinaldo" : "la nómina";
@@ -76,9 +77,7 @@ async function avisarAprobacionPorCorreo(period: any) {
   await enviarAvisoPorCorreo({
     destinatarios,
     asunto: `Ceiba — el cliente aprobó ${que} del período ${period.label}`,
-    mensaje: `El cliente de ${period.company.name} aprobó ${que} del período ${period.label} desde el enlace que le compartiste.\n\nTotal: ${money(
-      total
-    )} a ${period.payslips.length} colaborador${period.payslips.length === 1 ? "" : "es"}.\n\nTodavía falta que entres a Ceiba y le des clic a "Marcar como aprobada" para que quede aprobada de forma final: ${enlaceHistoricos}`,
+    mensaje: `El cliente de ${period.company.name} aprobó ${que} del período ${period.label} desde el enlace que le compartiste.\n\nTotal: ${total} a ${period.payslips.length} colaborador${period.payslips.length === 1 ? "" : "es"}.\n\nTodavía falta que entres a Ceiba y le des clic a "Marcar como aprobada" para que quede aprobada de forma final: ${enlaceHistoricos}`,
   });
 }
 
@@ -116,7 +115,7 @@ export default async function AprobarPorCorreoPage({ params }: { params: { token
               <Row label="Colaboradores" value={String(period.payslips.length)} />
               <Row
                 label="Total neto a pagar"
-                value={money(period.payslips.reduce((a, ps) => a + Number(ps.netPay), 0))}
+                value={formatTotalPorMoneda(period.payslips.map((ps) => ({ moneda: ps.moneda, monto: Number(ps.netPay) })))}
               />
             </div>
 
@@ -171,10 +170,6 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="font-mono">{value}</span>
     </div>
   );
-}
-
-function money(n: number) {
-  return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatFecha(d: Date) {

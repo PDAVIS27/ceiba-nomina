@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import SubmitButton from "@/components/SubmitButton";
 import { runPayroll, cargarPlanillaDesdeExcel, generarPreplanillaAguinaldo } from "@/app/dashboard/actions";
 import { balanceProvisiones } from "@/lib/provisiones";
+import { formatMonto } from "@/lib/moneda";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function NominaPage({
   );
   const saldoPorEmpleado = new Map(saldosAguinaldo.map((s) => [s.id, s.saldo]));
   const hoyISO = new Date().toISOString().slice(0, 10);
+  const hayUsd = employees.some((e) => e.moneda === "USD");
 
   return (
     <div>
@@ -40,10 +42,11 @@ export default async function NominaPage({
           Sube el archivo con código, nombre, cédula, cuenta bancaria, departamento, salario, horas extra,
           viáticos, retroactivos y otras deducciones — crea a quien no exista, actualiza a quien ya exista, y
           genera la preplanilla de una sola vez. La columna "Salario mensual" <strong>siempre</strong> es el salario
-          mensual completo de referencia, nunca lo dividas tú mismo: si este período es una quincena, elige
-          "Quincenal" abajo y Ceiba calcula sola la mitad del salario, el INSS, el IR y las provisiones que
-          corresponden — horas extra, comisiones, viáticos, retroactivos y otras deducciones sí van tal cual el
-          monto de este período, como ya lo pide la plantilla.
+          mensual completo de referencia, nunca lo dividas tú mismo: si este período es una quincena o una semana,
+          elige "Quincenal" o "Semanal" abajo y Ceiba calcula sola la parte del salario, el INSS, el IR y las
+          provisiones que corresponden — horas extra, comisiones, viáticos, retroactivos y otras deducciones sí van
+          tal cual el monto de este período, como ya lo pide la plantilla. El archivo no tiene columna de moneda —
+          cada colaborador se interpreta con la moneda que ya tenga configurada en <a href="/dashboard/colaboradores" className="text-gold">Colaboradores</a>.
         </p>
         <div className="flex flex-wrap gap-3 items-end mb-3">
           <a
@@ -58,6 +61,7 @@ export default async function NominaPage({
           <FechaField name="periodStart" label="Fecha de inicio" />
           <FechaField name="periodEnd" label="Fecha de fin" />
           <PeriodicidadField />
+          {hayUsd && <TipoCambioField />}
           <div>
             <label className="block text-xs text-inkdim mb-1.5">Archivo (.xlsx)</label>
             <input
@@ -69,6 +73,12 @@ export default async function NominaPage({
             Cargar y generar preplanilla
           </SubmitButton>
         </form>
+        {hayUsd && (
+          <p className="text-inkfaint text-xs mt-3">
+            Tienes colaboradores en dólares — si el archivo incluye a alguno, el tipo de cambio de arriba es
+            obligatorio (se usa solo para ubicar bien su tramo de IR; el INSS no lo necesita).
+          </p>
+        )}
       </section>
 
       <section className="bg-panel border border-line rounded-xl p-6">
@@ -79,7 +89,9 @@ export default async function NominaPage({
           importante: es lo que usa la plataforma para saber hasta qué día quedó cubierto cada colaborador en
           el histórico de provisiones (ver su detalle en Colaboradores). La columna "Otras deducciones" es para
           un descuento que decides tú y no es de ley (error de pago, falta, llegada tardía, etc.) — se resta
-          del neto sin afectar el INSS ni el IR.
+          del neto sin afectar el INSS ni el IR. ¿Tienes un colaborador que se paga aparte (ej. semanal, mientras
+          los demás son mensuales)? Desmarca "Incluir" en los demás y corre esta planilla solo para él — luego
+          corre otra para el resto, con su propia periodicidad.
         </p>
         <form action={runPayroll}>
           <div className="mb-4 flex flex-wrap gap-3 items-end">
@@ -87,23 +99,26 @@ export default async function NominaPage({
             <FechaField name="periodStart" label="Fecha de inicio" />
             <FechaField name="periodEnd" label="Fecha de fin" />
             <PeriodicidadField />
+            {hayUsd && <TipoCambioField />}
           </div>
           <p className="text-inkfaint text-xs mb-4 -mt-2">
             El salario de cada colaborador (columna de Colaboradores) siempre es su salario mensual completo — si
-            eliges "Quincenal", Ceiba calcula sola la mitad del salario, el INSS, el IR y las provisiones de este
-            período.
+            eliges "Quincenal" o "Semanal", Ceiba calcula sola la parte del salario, el INSS, el IR y las provisiones
+            de este período.
+            {hayUsd && " Si incluyes a algún colaborador en dólares, el tipo de cambio de arriba es obligatorio."}
           </p>
 
           {employees.length > 0 && (
             <table className="w-full text-sm mb-5">
               <thead>
                 <tr className="text-inkfaint text-xs uppercase font-mono text-left border-b border-linestrong">
+                  <th className="pb-2">Incluir</th>
                   <th className="pb-2">Colaborador</th>
                   <th className="pb-2 text-right">Horas extra</th>
-                  <th className="pb-2 text-right">Comisiones (C$)</th>
-                  <th className="pb-2 text-right">Retroactivos (C$)</th>
-                  <th className="pb-2 text-right">Viáticos (C$)</th>
-                  <th className="pb-2 text-right">Otras deducciones (C$)</th>
+                  <th className="pb-2 text-right">Comisiones</th>
+                  <th className="pb-2 text-right">Retroactivos</th>
+                  <th className="pb-2 text-right">Viáticos</th>
+                  <th className="pb-2 text-right">Otras deducciones</th>
                   <th className="pb-2">Motivo</th>
                 </tr>
               </thead>
@@ -111,9 +126,15 @@ export default async function NominaPage({
                 {employees.map((e) => (
                   <tr key={e.id} className="border-b border-line">
                     <td className="py-2.5">
+                      <input type="checkbox" name={`incluir_${e.id}`} defaultChecked className="w-4 h-4 accent-gold" />
+                    </td>
+                    <td className="py-2.5">
                       {e.fullName}
                       {e.tipoContrato === "SERVICIOS_PROFESIONALES" && (
                         <span className="text-gold text-[10px] font-mono ml-1.5">SERV. PROF.</span>
+                      )}
+                      {e.moneda === "USD" && (
+                        <span className="text-gold text-[10px] font-mono ml-1.5">USD</span>
                       )}
                     </td>
                     <td className="py-2.5 text-right">
@@ -175,7 +196,7 @@ export default async function NominaPage({
                 <tr className="text-inkfaint text-xs uppercase font-mono text-left border-b border-linestrong">
                   <th className="pb-2">Colaborador</th>
                   <th className="pb-2 text-right">Saldo acumulado</th>
-                  <th className="pb-2 text-right">Monto a pagar (C$)</th>
+                  <th className="pb-2 text-right">Monto a pagar</th>
                 </tr>
               </thead>
               <tbody>
@@ -183,8 +204,11 @@ export default async function NominaPage({
                   const saldo = saldoPorEmpleado.get(e.id) ?? 0;
                   return (
                     <tr key={e.id} className="border-b border-line">
-                      <td className="py-2.5">{e.fullName}</td>
-                      <td className="py-2.5 text-right font-mono text-inkdim">{money(saldo)}</td>
+                      <td className="py-2.5">
+                        {e.fullName}
+                        {e.moneda === "USD" && <span className="text-gold text-[10px] font-mono ml-1.5">USD</span>}
+                      </td>
+                      <td className="py-2.5 text-right font-mono text-inkdim">{money(saldo, e.moneda)}</td>
                       <td className="py-2.5 text-right">
                         <input name={`aguinaldo_${e.id}`} type="number" min="0" step="0.01" defaultValue={saldo.toFixed(2)}
                           className="w-32 bg-[#12181a] border border-linestrong rounded-lg px-2.5 py-1.5 text-sm text-right" />
@@ -208,8 +232,8 @@ export default async function NominaPage({
   );
 }
 
-function money(n: number) {
-  return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function money(n: number, moneda?: string | null) {
+  return formatMonto(n, moneda);
 }
 
 function Field({ name, label, placeholder }: { name: string; label: string; placeholder?: string }) {
@@ -244,7 +268,21 @@ function PeriodicidadField() {
       >
         <option value="MENSUAL">Mensual</option>
         <option value="QUINCENAL">Quincenal</option>
+        <option value="SEMANAL">Semanal</option>
       </select>
+    </div>
+  );
+}
+
+function TipoCambioField() {
+  return (
+    <div>
+      <label className="block text-xs text-inkdim mb-1.5">Tipo de cambio (C$ por US$)</label>
+      <input
+        name="tipoCambio" type="number" min="0" step="0.0001" placeholder="36.6200"
+        title="Obligatorio si incluyes a algún colaborador que se paga en dólares — se usa solo para ubicar bien su tramo de IR"
+        className="w-40 bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm"
+      />
     </div>
   );
 }

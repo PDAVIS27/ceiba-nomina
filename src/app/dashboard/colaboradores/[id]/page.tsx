@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { balanceProvisiones, TERMINATION_LABELS } from "@/lib/provisiones";
 import { mesesEntre } from "@/lib/dateUtils";
+import { formatMonto } from "@/lib/moneda";
 import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
 import PagosPendientesFields from "@/components/PagosPendientesFields";
@@ -13,6 +14,7 @@ import {
   darDeBaja,
   reingresarColaborador,
   actualizarTipoContrato,
+  actualizarMoneda,
 } from "@/app/dashboard/actions";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,7 @@ const MENSAJES_OK: Record<string, string> = {
   baja: "Se dio de baja al colaborador y se calculó su liquidación.",
   reingreso: "Se reingresó al colaborador.",
   config: "Se actualizó el tipo de contrato del colaborador.",
+  moneda: "Se actualizó la moneda del colaborador.",
 };
 
 export default async function ColaboradorDetallePage({
@@ -119,6 +122,31 @@ export default async function ColaboradorDetallePage({
         </section>
       )}
 
+      {employee.active && (
+        <section className="bg-panel border border-line rounded-xl p-6 mb-8">
+          <h3 className="font-serif text-lg font-semibold mb-1">Moneda</h3>
+          <p className="text-inkdim text-sm mb-4">
+            En qué moneda está su salario. El INSS (7% fijo) y la retención de servicios profesionales (10% fijo) se
+            calculan igual en cualquier moneda, pero el IR usa una tabla con tramos en córdobas — para un colaborador
+            en <strong>dólares</strong>, Ceiba te va a pedir el tipo de cambio del día cada vez que corras su
+            planilla o calcules su liquidación, solo para ubicar el tramo correcto.
+          </p>
+          <form action={actualizarMoneda} className="flex flex-wrap gap-3 items-end">
+            <input type="hidden" name="employeeId" value={employee.id} />
+            <div>
+              <label className="block text-xs text-inkdim mb-1.5">Moneda</label>
+              <select name="moneda" defaultValue={employee.moneda} className="bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm">
+                <option value="NIO">Córdobas (C$)</option>
+                <option value="USD">Dólares (US$)</option>
+              </select>
+            </div>
+            <SubmitButton className="px-4 py-2.5 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium" pendingText="Guardando…">
+              Guardar
+            </SubmitButton>
+          </form>
+        </section>
+      )}
+
       {employee.tipoContrato === "SERVICIOS_PROFESIONALES" && !employee.acumulaPrestaciones && (
         <div className="bg-panel/60 border border-line rounded-xl px-5 py-3 mb-4 text-xs text-inkdim">
           Este colaborador es de <strong>servicios profesionales</strong> y no tiene la acumulación activada — los
@@ -148,6 +176,7 @@ export default async function ColaboradorDetallePage({
           acumulado={balance.aguinaldoAcumulado}
           movido={balance.aguinaldoPagado}
           movidoLabel="pagado"
+          moneda={employee.moneda}
         />
         <ProvStat
           label="Vacaciones"
@@ -155,10 +184,11 @@ export default async function ColaboradorDetallePage({
           acumulado={balance.vacacionesAcumulado}
           movido={balance.vacacionesTomado}
           movidoLabel="tomado"
+          moneda={employee.moneda}
         />
         <div className="bg-panel border border-line rounded-xl px-5 py-5">
           <div className="text-inkfaint text-[11px] uppercase font-mono tracking-wide">Indemnización acumulada</div>
-          <div className="font-serif text-2xl font-semibold mt-2 text-gold">{money(balance.indemnizacionAcumulada)}</div>
+          <div className="font-serif text-2xl font-semibold mt-2 text-gold">{money(balance.indemnizacionAcumulada, employee.moneda)}</div>
           <div className="text-xs text-inkdim mt-1">Solo se paga si la baja es sin causa u otra causa ajena (Art. 45 CT)</div>
         </div>
       </div>
@@ -194,9 +224,9 @@ export default async function ColaboradorDetallePage({
               {payslips.map((ps) => (
                 <tr key={ps.id} className="border-b border-line">
                   <td className="py-2.5">{ps.period.label}</td>
-                  <td className="py-2.5 text-right font-mono">{money(Number(ps.provisionAguinaldo))}</td>
-                  <td className="py-2.5 text-right font-mono">{money(Number(ps.provisionVacaciones))}</td>
-                  <td className="py-2.5 text-right font-mono">{money(Number(ps.provisionIndemnizacion))}</td>
+                  <td className="py-2.5 text-right font-mono">{money(Number(ps.provisionAguinaldo), ps.moneda)}</td>
+                  <td className="py-2.5 text-right font-mono">{money(Number(ps.provisionVacaciones), ps.moneda)}</td>
+                  <td className="py-2.5 text-right font-mono">{money(Number(ps.provisionIndemnizacion), ps.moneda)}</td>
                 </tr>
               ))}
             </tbody>
@@ -223,7 +253,7 @@ export default async function ColaboradorDetallePage({
                   <td className="py-2.5">
                     {m.tipo === "AGUINALDO" ? "Aguinaldo pagado" : `Vacaciones tomadas${m.dias ? ` (${Number(m.dias)} días)` : ""}`}
                   </td>
-                  <td className="py-2.5 text-right font-mono">{money(Number(m.amount))}</td>
+                  <td className="py-2.5 text-right font-mono">{money(Number(m.amount), employee.moneda)}</td>
                   <td className="py-2.5 text-xs text-inkdim">{m.note}</td>
                 </tr>
               ))}
@@ -315,6 +345,19 @@ export default async function ColaboradorDetallePage({
                 </p>
               </div>
 
+              {employee.moneda === "USD" && (
+                <div className="w-full border-t border-line pt-3 mt-1">
+                  <label className="block text-xs text-inkdim mb-1.5">Tipo de cambio (C$ por US$)</label>
+                  <input name="tipoCambio" type="number" min="0" step="0.0001" placeholder="36.6200" required
+                    className="w-40 bg-[#12181a] border border-linestrong rounded-lg px-3.5 py-2.5 text-sm" />
+                  <p className="text-inkfaint text-xs mt-1.5">
+                    Este colaborador se paga en dólares — se necesita el tipo de cambio del día para ubicar bien el
+                    tramo de IR (la tabla usa córdobas), tanto de su salario gravable como de horas extra o pagos
+                    pendientes.
+                  </p>
+                </div>
+              )}
+
               <div className="w-full border-t border-line pt-3 mt-1">
                 <p className="text-xs text-inkfaint mb-3">
                   Salarios que se le deben y todavía no se le han pagado (una quincena que no se alcanzó a
@@ -354,31 +397,34 @@ export default async function ColaboradorDetallePage({
             <Detalle label="Tipo de baja" value={TERMINATION_LABELS[liquidacion.terminationType as keyof typeof TERMINATION_LABELS]?.label ?? liquidacion.terminationType} />
             <Detalle label="Fecha de baja" value={new Date(liquidacion.terminatedAt).toLocaleDateString("es-NI")} />
             <Detalle label="Antigüedad" value={`${liquidacion.antiguedadMeses} meses`} />
+            {liquidacion.moneda === "USD" && liquidacion.tipoCambioAplicado && (
+              <Detalle label="Tipo de cambio aplicado" value={`C$ ${Number(liquidacion.tipoCambioAplicado).toLocaleString("es-NI", { minimumFractionDigits: 4 })} por US$`} />
+            )}
           </div>
 
           {/* Ingresos: todo lo que se le reconoce, exento y gravable, antes de retenciones. */}
           <div className="border-t border-line pt-4 mb-4">
             <div className="text-xs text-inkfaint uppercase font-mono mb-2">Ingresos</div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
-              <Detalle label="Aguinaldo pendiente (exento)" value={money(Number(liquidacion.aguinaldoPendiente))} />
-              <Detalle label="Vacaciones pendientes (gravable)" value={money(Number(liquidacion.vacacionesPendientes))} />
+              <Detalle label="Aguinaldo pendiente (exento)" value={money(Number(liquidacion.aguinaldoPendiente), liquidacion.moneda)} />
+              <Detalle label="Vacaciones pendientes (gravable)" value={money(Number(liquidacion.vacacionesPendientes), liquidacion.moneda)} />
               {Number(liquidacion.horasExtraCantidad) > 0 && (
                 <Detalle
                   label={`Horas extra pendientes · ${Number(liquidacion.horasExtraCantidad)} hrs (gravable)`}
-                  value={money(Number(liquidacion.horasExtraMonto))}
+                  value={money(Number(liquidacion.horasExtraMonto), liquidacion.moneda)}
                 />
               )}
               <Detalle
                 label="Indemnización (exenta)"
-                value={liquidacion.aplicaIndemnizacion ? money(Number(liquidacion.indemnizacion)) : "No aplica"}
+                value={liquidacion.aplicaIndemnizacion ? money(Number(liquidacion.indemnizacion), liquidacion.moneda) : "No aplica"}
               />
               {liquidacion.pagosPendientes.map((p) => (
-                <Detalle key={p.id} label={`${p.concepto} (gravable)`} value={money(Number(p.monto))} />
+                <Detalle key={p.id} label={`${p.concepto} (gravable)`} value={money(Number(p.monto), liquidacion.moneda)} />
               ))}
             </div>
             <div className="flex justify-between items-center mt-3 pt-3 border-t border-line/60">
               <span className="text-xs text-inkdim">Total ingresos</span>
-              <span className="font-mono font-semibold">{money(Number(liquidacion.totalIngresos))}</span>
+              <span className="font-mono font-semibold">{money(Number(liquidacion.totalIngresos), liquidacion.moneda)}</span>
             </div>
           </div>
 
@@ -386,19 +432,19 @@ export default async function ColaboradorDetallePage({
           <div className="border-t border-line pt-4 mb-4">
             <div className="text-xs text-inkfaint uppercase font-mono mb-2">
               Deducciones — {employee.tipoContrato === "SERVICIOS_PROFESIONALES" ? "retención del 10%" : "INSS e IR"} calculados sobre vacaciones + horas extra + pagos pendientes juntos
-              ({money(Number(liquidacion.gravableBruto))} gravable)
+              ({money(Number(liquidacion.gravableBruto), liquidacion.moneda)} gravable)
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
               {employee.tipoContrato !== "SERVICIOS_PROFESIONALES" && (
-                <Detalle label="Seguro Social (INSS 7%)" value={"− " + money(Number(liquidacion.gravableInss))} />
+                <Detalle label="Seguro Social (INSS 7%)" value={"− " + money(Number(liquidacion.gravableInss), liquidacion.moneda)} />
               )}
               <Detalle
                 label={employee.tipoContrato === "SERVICIOS_PROFESIONALES" ? "Retención servicios profesionales (10%)" : "Impuesto sobre la renta (IR)"}
-                value={"− " + money(Number(liquidacion.gravableIr))}
+                value={"− " + money(Number(liquidacion.gravableIr), liquidacion.moneda)}
               />
               <Detalle
                 label="Total deducciones"
-                value={"− " + money(Number(liquidacion.gravableInss) + Number(liquidacion.gravableIr))}
+                value={"− " + money(Number(liquidacion.gravableInss) + Number(liquidacion.gravableIr), liquidacion.moneda)}
                 bold
               />
             </div>
@@ -406,7 +452,7 @@ export default async function ColaboradorDetallePage({
 
           <div className="pt-4 border-t border-line flex justify-between items-center">
             <span className="text-sm text-inkdim">Neto a recibir</span>
-            <span className="font-serif text-2xl font-semibold">{money(Number(liquidacion.total))}</span>
+            <span className="font-serif text-2xl font-semibold">{money(Number(liquidacion.total), liquidacion.moneda)}</span>
           </div>
           {liquidacion.note && <p className="text-inkfaint text-xs mt-3">Nota: {liquidacion.note}</p>}
         </section>
@@ -421,19 +467,21 @@ function ProvStat({
   acumulado,
   movido,
   movidoLabel,
+  moneda,
 }: {
   label: string;
   saldo: number;
   acumulado: number;
   movido: number;
   movidoLabel: string;
+  moneda?: string | null;
 }) {
   return (
     <div className="bg-panel border border-line rounded-xl px-5 py-5">
       <div className="text-inkfaint text-[11px] uppercase font-mono tracking-wide">{label} — saldo</div>
-      <div className="font-serif text-2xl font-semibold mt-2 text-emerald">{money(saldo)}</div>
+      <div className="font-serif text-2xl font-semibold mt-2 text-emerald">{money(saldo, moneda)}</div>
       <div className="text-xs text-inkdim mt-1">
-        {money(acumulado)} acumulado · {money(movido)} {movidoLabel}
+        {money(acumulado, moneda)} acumulado · {money(movido, moneda)} {movidoLabel}
       </div>
     </div>
   );
@@ -448,6 +496,6 @@ function Detalle({ label, value, bold }: { label: string; value: string; bold?: 
   );
 }
 
-function money(n: number) {
-  return "C$ " + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function money(n: number, moneda?: string | null) {
+  return formatMonto(n, moneda);
 }

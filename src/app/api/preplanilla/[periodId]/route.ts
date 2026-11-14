@@ -46,6 +46,7 @@ export async function GET(_req: Request, { params }: { params: { periodId: strin
       ir: Number(ps.irMensual),
       neto: Number(ps.netPay),
       esServiciosProfesionales: ps.employee.tipoContrato === "SERVICIOS_PROFESIONALES",
+      moneda: ps.moneda,
     })),
   });
 
