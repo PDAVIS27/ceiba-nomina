@@ -267,13 +267,23 @@ export interface DesglosePeriodo {
  */
 // SEMANAL: semana completa (7/30 del mes) — incluye el séptimo día de
 // descanso pagado (Art. 64 CT), sin importar si el colaborador trabaja 5 o
-// 6 días esa semana. Es el caso normal en Nicaragua.
+// 6 días esa semana. Es el caso normal en Nicaragua. Proyecta el IR sobre
+// 52 pagos/año (semanas reales del calendario).
 // SEMANAL_5: SOLO los 5 días realmente trabajados de lunes a viernes (5/30
 // del mes), sin nada por el fin de semana — a pedido explícito del negocio
 // para un colaborador con el que de verdad se acordó pagar únicamente por
-// día trabajado, sin descanso semanal pagado. Ver el comentario de
-// `periodicidad` más abajo.
-export type PeriodicidadKey = "MENSUAL" | "QUINCENAL" | "SEMANAL" | "SEMANAL_5";
+// día trabajado, sin descanso semanal pagado. También proyecta sobre 52
+// pagos/año (semanas reales).
+// SEMANAL_4: el salario mensual de referencia se divide en exactamente 4
+// pagos semanales iguales (÷4, es decir 7.5/30 del mes cada uno) — a pedido
+// explícito de un negocio que piensa y acuerda el pago "por semana" pero
+// cuenta el mes como 4 semanas parejas, no como calendario real (que tiene
+// ~4.33 semanas). Por eso proyecta el IR sobre 48 pagos/año (4 × 12 meses)
+// en vez de 52 — así el total anual proyectado para la tabla del Art. 23
+// coincide EXACTO con el de un cálculo mensual normal (48 pagos × 1/4 = 12
+// meses), sin importar que en el calendario real caigan más o menos de 48
+// pagos en un año. Ver el comentario de `periodicidad` más abajo.
+export type PeriodicidadKey = "MENSUAL" | "QUINCENAL" | "SEMANAL" | "SEMANAL_5" | "SEMANAL_4";
 export type MonedaKey = "NIO" | "USD";
 
 /** Normaliza un valor suelto (de un campo de formulario, o de Employee/Payslip.periodicidad en la base) a un PeriodicidadKey válido — MENSUAL por defecto si no lo es. Única fuente de verdad para este chequeo: úsala en vez de repetir el ternario en cada página/acción. */
@@ -281,6 +291,7 @@ export function normalizarPeriodicidad(raw: unknown): PeriodicidadKey {
   if (raw === "QUINCENAL") return "QUINCENAL";
   if (raw === "SEMANAL") return "SEMANAL";
   if (raw === "SEMANAL_5") return "SEMANAL_5";
+  if (raw === "SEMANAL_4") return "SEMANAL_4";
   return "MENSUAL";
 }
 
@@ -305,15 +316,13 @@ export function calcularPeriodo(params: {
   otrasDeducciones?: number;
   otrasDeduccionesConcepto?: string | null;
   // MENSUAL (por defecto, sin cambios de comportamiento), QUINCENAL,
-  // SEMANAL o SEMANAL_5 (ver el comentario de PeriodicidadKey arriba). En
-  // QUINCENAL/SEMANAL/SEMANAL_5, la base salarial y las provisiones de este
-  // período se prorratean (15/30, 7/30 o 5/30 del mes), y el IR se proyecta
-  // sobre 24 quincenas o 52 semanas al año en vez de 12 meses — así el
-  // salario mensual de referencia nunca cambia en Colaboradores/Excel, y no
-  // hay que calcular la parte a mano. Tanto SEMANAL como SEMANAL_5 usan 52
-  // pagos/año (hay 52 viernes de pago al año sin importar si cada uno cubre
-  // 5 o 7 días) — igual de simple que el resto de este motor ("proyección
-  // simple", ver comentario de la función).
+  // SEMANAL, SEMANAL_5 o SEMANAL_4 (ver el comentario de PeriodicidadKey
+  // arriba). En todos los casos QUINCENAL/SEMANAL*, la base salarial y las
+  // provisiones de este período se prorratean (15/30, 7/30, 5/30 o 7.5/30
+  // del mes según cuál sea), y el IR se proyecta sobre 24 quincenas, 52
+  // semanas o 48 pagos al año en vez de 12 meses — así el salario mensual
+  // de referencia nunca cambia en Colaboradores/Excel, y no hay que
+  // calcular la parte a mano.
   periodicidad?: PeriodicidadKey;
   // "NIO" (por defecto, córdobas) o "USD" (dólares) — Employee.moneda. Todos
   // los montos de entrada (bruto, comisiones, retroactivos, viáticos, otras
@@ -378,7 +387,15 @@ export function calcularPeriodo(params: {
   // Indemnizacion() de siempre (salarioMensual/360 × 30 = salarioMensual/12),
   // así que MENSUAL queda bit a bit igual que antes de este cambio.
   const diasDelPeriodo =
-    periodicidad === "SEMANAL_5" ? 5 : periodicidad === "SEMANAL" ? 7 : periodicidad === "QUINCENAL" ? 15 : 30;
+    periodicidad === "SEMANAL_4"
+      ? 7.5
+      : periodicidad === "SEMANAL_5"
+        ? 5
+        : periodicidad === "SEMANAL"
+          ? 7
+          : periodicidad === "QUINCENAL"
+            ? 15
+            : 30;
   // Solo la BASE salarial se prorratea — horas extra, comisiones,
   // retroactivos, viáticos y otras deducciones ya vienen como montos de ESTE
   // período (así lo pide la plantilla de Excel), no se tocan.
@@ -390,7 +407,13 @@ export function calcularPeriodo(params: {
   // `periodicidad` en los parámetros de la función) — da igual si cada pago
   // cubre 5 o 7 días, lo que importa aquí es cuántos pagos hay al año.
   const periodosPorAnio =
-    periodicidad === "SEMANAL" || periodicidad === "SEMANAL_5" ? 52 : periodicidad === "QUINCENAL" ? 24 : 12;
+    periodicidad === "SEMANAL_4"
+      ? 48
+      : periodicidad === "SEMANAL" || periodicidad === "SEMANAL_5"
+        ? 52
+        : periodicidad === "QUINCENAL"
+          ? 24
+          : 12;
 
   const horasExtraMonto = calcularHorasExtra(salarioMensualReferencia, horasExtraCantidad);
   const totalGravable = round2(baseSalarialDelPeriodo + horasExtraMonto + comisiones + retroactivos);

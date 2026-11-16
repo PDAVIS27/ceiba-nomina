@@ -153,6 +153,7 @@ export default async function ColaboradorDetallePage({
                 <option value="QUINCENAL">Quincenal</option>
                 <option value="SEMANAL">Semanal (7 días, incluye descanso pagado)</option>
                 <option value="SEMANAL_5">Semanal — solo lunes a viernes (5 días)</option>
+                <option value="SEMANAL_4">Semanal — mes de 4 semanas exactas (÷4)</option>
               </select>
             </div>
             <SubmitButton className="px-4 py-2.5 rounded-lg bg-emerald text-[#eafaf3] text-sm font-medium" pendingText="Guardando…">

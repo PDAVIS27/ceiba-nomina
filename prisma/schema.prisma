@@ -146,12 +146,15 @@ model Employee {
   // dólares para que el neto a pagar quede en la misma moneda del salario.
   moneda String @default("NIO")
 
-  // MENSUAL (por defecto) | QUINCENAL | SEMANAL | SEMANAL_5 — con qué
-  // frecuencia se le paga HABITUALMENTE a este colaborador. SEMANAL es una
-  // semana completa (7/30 del mes, incluye el descanso semanal pagado —
-  // Art. 64 CT); SEMANAL_5 paga SOLO los 5 días de lunes a viernes (5/30
-  // del mes), sin nada por el fin de semana — ver calcularPeriodo() en
-  // src/lib/payroll.ts para el detalle legal/numérico de cada una. Se usa
+  // MENSUAL (por defecto) | QUINCENAL | SEMANAL | SEMANAL_5 | SEMANAL_4 —
+  // con qué frecuencia se le paga HABITUALMENTE a este colaborador. SEMANAL
+  // es una semana completa (7/30 del mes, incluye el descanso semanal
+  // pagado — Art. 64 CT); SEMANAL_5 paga SOLO los 5 días de lunes a
+  // viernes (5/30 del mes), sin nada por el fin de semana; SEMANAL_4 divide
+  // el salario mensual de referencia en exactamente 4 pagos semanales
+  // iguales (÷4, para negocios que piensan el mes como "4 semanas" en vez
+  // de un calendario real) — ver calcularPeriodo() en src/lib/payroll.ts
+  // para el detalle legal/numérico de cada una. Se usa
   // como valor por defecto cada vez que se corre su planilla: en el
   // formulario a mano (Correr nómina) cada colaborador trae su propia fila
   // con esta periodicidad ya marcada (anulable solo para esa corrida si

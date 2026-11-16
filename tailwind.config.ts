@@ -1,30 +1,759 @@
-import type { Config } from "tailwindcss";
+import { PDFDocument, StandardFonts, rgb, PageSizes, type PDFPage } from "pdf-lib";
+import { formatMonto, formatTotalPorMoneda } from "@/lib/moneda";
 
-const config: Config = {
-  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
-  theme: {
-    extend: {
-      colors: {
-        bg: "#12191a",
-        panel: "#1b2426",
-        panel2: "#202b2d",
-        ink: "#f3efe6",
-        inkdim: "#9caaa7",
-        inkfaint: "#6d7d79",
-        emerald: "#3d8a73",
-        emeralddeep: "#2a5c4b",
-        gold: "#c9a227",
-        lava: "#c1440e",
-        line: "rgba(243,239,230,0.12)",
-        linestrong: "rgba(243,239,230,0.22)",
-      },
-      fontFamily: {
-        serif: ["Fraunces", "Georgia", "serif"],
-        sans: ["IBM Plex Sans", "sans-serif"],
-        mono: ["IBM Plex Mono", "monospace"],
-      },
+export interface FilaPDF {
+  nombre: string;
+  codigo?: string | null;
+  cedula?: string | null;
+  fechaIngreso?: Date | null;
+  puesto: string;
+  bruto: number;
+  horasExtraCantidad: number;
+  horasExtraMonto: number;
+  comisiones: number;
+  retroactivos: number;
+  viaticos: number;
+  otrasDeducciones?: number;
+  otrasDeduccionesConcepto?: string | null;
+  inss: number;
+  ir: number;
+  neto: number;
+  // true si este colaborador es de servicios profesionales (retención fija
+  // del 10%, sin INSS) en vez del cálculo laboral de siempre.
+  esServiciosProfesionales?: boolean;
+  // "NIO" (por defecto) o "USD" — en qué moneda están los montos de esta
+  // fila (Payslip.moneda). Ver src/lib/moneda.ts.
+  moneda?: string | null;
+}
+
+export interface DatosPreplanillaPDF {
+  empresa: string;
+  periodo: string;
+  estado: "BORRADOR" | "APROBADA";
+  generadoEl: Date;
+  aprobadoEl?: Date | null;
+  filas: FilaPDF[];
+  // "AGUINALDO" muestra un solo concepto por colaborador (el aguinaldo,
+  // exento de INSS/IR) en vez del desglose completo de nómina — para el pago
+  // especial de diciembre (ver generarPreplanillaAguinaldo en actions.ts).
+  tipoPeriodo?: "NOMINA" | "AGUINALDO";
+}
+
+// Igual que formatMonto() de src/lib/moneda.ts, pero con la firma money(n,
+// moneda) que ya usaba este archivo — moneda indefinida sigue mostrando "C$"
+// como siempre (comprobantes/PDFs de antes de este campo).
+function money(n: number, moneda?: string | null): string {
+  return formatMonto(n, moneda);
+}
+
+export async function generarPDFComprobanteIndividual(datos: {
+  empresa: string;
+  periodo: string;
+  colaborador: string;
+  cedula?: string | null;
+  puesto: string;
+  bruto: number;
+  horasExtraCantidad: number;
+  horasExtraMonto: number;
+  comisiones: number;
+  retroactivos: number;
+  viaticos: number;
+  otrasDeducciones?: number;
+  otrasDeduccionesConcepto?: string | null;
+  inss: number;
+  ir: number;
+  neto: number;
+  esServiciosProfesionales?: boolean;
+  moneda?: string | null;
+}): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  const pageWidth = 320;
+  const pageHeight = 570;
+  const margin = 24;
+  const page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  function texto(t: string, x: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    page.drawText(t, { x, y: yy, size: opts.size ?? 9, font: opts.bold ? fontBold : font, color: opts.color ?? INK });
+  }
+  function linea(punteada = true) {
+    y -= 4;
+    if (punteada) {
+      for (let x = margin; x < pageWidth - margin; x += 4) {
+        page.drawLine({ start: { x, y }, end: { x: x + 2, y }, thickness: 0.75, color: LINE });
+      }
+    } else {
+      page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1, color: INK });
+    }
+    y -= 12;
+  }
+  function fila(label: string, valor: string, bold = false) {
+    texto(label, margin, y, { size: 9, color: bold ? INK : DIM, bold });
+    texto(valor, pageWidth - margin - font.widthOfTextAtSize(valor, 9), y, { size: 9, bold });
+    y -= 16;
+  }
+
+  dibujarLogoCeiba(page, margin, y + 4, 16);
+  texto("CEIBA", margin + 20, y - 6, { size: 11, bold: true, color: EMERALD });
+  y -= 24;
+  texto("COMPROBANTE DE PAGO", margin, y, { size: 12, bold: true, color: INK });
+  y -= 16;
+  texto(datos.empresa, margin, y, { size: 9, bold: true });
+  y -= 13;
+  texto(`Período: ${datos.periodo}`, margin, y, { size: 8, color: DIM });
+  linea();
+
+  texto(datos.colaborador, margin, y, { size: 11, bold: true });
+  y -= 12;
+  texto(datos.puesto + (datos.cedula ? `  ·  Cédula ${datos.cedula}` : ""), margin, y, { size: 8, color: DIM });
+  y -= 14;
+  linea();
+
+  texto("INGRESOS", margin, y, { size: 7.5, bold: true, color: EMERALD });
+  y -= 14;
+  fila("Salario bruto", money(datos.bruto, datos.moneda));
+  if (datos.horasExtraMonto > 0) fila(`Horas extra (${datos.horasExtraCantidad}h)`, money(datos.horasExtraMonto, datos.moneda));
+  if (datos.comisiones > 0) fila("Comisiones", money(datos.comisiones, datos.moneda));
+  if (datos.retroactivos > 0) fila("Retroactivos", money(datos.retroactivos, datos.moneda));
+  if (datos.viaticos > 0) fila("Viáticos", money(datos.viaticos, datos.moneda));
+
+  linea();
+  texto("RETENCIONES", margin, y, { size: 7.5, bold: true, color: GOLD });
+  y -= 14;
+  if (datos.esServiciosProfesionales) {
+    fila("Retención servicios profesionales (10%)", "- " + money(datos.ir, datos.moneda));
+  } else {
+    fila("INSS laboral", "- " + money(datos.inss, datos.moneda));
+    fila("IR retenido", "- " + money(datos.ir, datos.moneda));
+  }
+  if ((datos.otrasDeducciones ?? 0) > 0) {
+    fila(datos.otrasDeduccionesConcepto || "Otras deducciones", "- " + money(datos.otrasDeducciones!, datos.moneda));
+  }
+  linea(false);
+  fila("NETO A PAGAR", money(datos.neto, datos.moneda), true);
+
+  return pdf.save();
+}
+
+export async function generarPDFLiquidacion(datos: {
+  empresa: string;
+  colaborador: string;
+  cedula?: string;
+  puesto: string;
+  fechaIngreso: Date;
+  fechaBaja: Date;
+  antiguedadMeses: number;
+  tipoBajaLabel: string;
+  aguinaldoPendiente: number;
+  vacacionesPendientes: number;
+  horasExtraCantidad: number;
+  horasExtraMonto: number;
+  aplicaIndemnizacion: boolean;
+  indemnizacion: number;
+  pagosPendientes: { concepto: string; monto: number }[];
+  // Base gravable = vacacionesPendientes + la suma de pagosPendientes —
+  // aguinaldo e indemnización quedan fuera, exentos de ley. El INSS y el IR
+  // se calculan UNA sola vez sobre gravableBruto, no por separado.
+  gravableBruto: number;
+  gravableInss: number;
+  gravableIr: number;
+  totalIngresos: number;
+  total: number;
+  moneda?: string | null;
+}): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  // Formato tipo "comprobante de liquidación" clásico: cuadro de datos del
+  // colaborador, tabla de ingresos con líneas de cuadrícula, tabla de
+  // deducciones, neto a recibir, y una constancia de recibido con firmas —
+  // carta tamaño completo (no un recibo angosto) para que quepa como tabla.
+  const pageWidth = PageSizes.Letter[0];
+  const pageHeight = PageSizes.Letter[1];
+  const margin = 46;
+  const tableLeft = margin;
+  const tableRight = pageWidth - margin;
+  const page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  function texto(t: string, x: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    page.drawText(t, { x, y: yy, size: opts.size ?? 9, font: opts.bold ? fontBold : font, color: opts.color ?? INK });
+  }
+  function textoDer(t: string, xRight: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    const size = opts.size ?? 9;
+    const f = opts.bold ? fontBold : font;
+    texto(t, xRight - f.widthOfTextAtSize(t, size), yy, opts);
+  }
+  function textoMultilinea(t: string, x: number, ancho: number, size = 7.5, color = DIM) {
+    const palabras = t.split(" ");
+    let linea = "";
+    for (const palabra of palabras) {
+      const prueba = linea ? `${linea} ${palabra}` : palabra;
+      if (font.widthOfTextAtSize(prueba, size) > ancho && linea) {
+        texto(linea, x, y, { size, color });
+        y -= size + 3;
+        linea = palabra;
+      } else {
+        linea = prueba;
+      }
+    }
+    if (linea) {
+      texto(linea, x, y, { size, color });
+      y -= size + 3;
+    }
+  }
+  function hline(x1: number, x2: number, yy: number, color = LINE, thickness = 0.75) {
+    page.drawLine({ start: { x: x1, y: yy }, end: { x: x2, y: yy }, thickness, color });
+  }
+  function vline(x: number, y1: number, y2: number, color = LINE, thickness = 0.75) {
+    page.drawLine({ start: { x, y: y1 }, end: { x, y: y2 }, thickness, color });
+  }
+
+  // ---------- Encabezado ----------
+  dibujarLogoCeiba(page, margin, y + 6, 18);
+  texto("CEIBA", margin + 22, y - 4, { size: 12, bold: true, color: EMERALD });
+  textoDer(`Generado: ${new Date().toLocaleDateString("es-NI")}`, tableRight, y - 4, { size: 8, color: DIM });
+  y -= 26;
+  texto("CÁLCULO DE LIQUIDACIÓN LABORAL", margin, y, { size: 14, bold: true, color: EMERALD });
+  y -= 20;
+  texto(datos.empresa, margin, y, { size: 10, color: DIM });
+  y -= 22;
+
+  // ---------- Cuadro de datos del colaborador ----------
+  const datosFilas: [string, string][] = [
+    ["Colaborador", datos.colaborador],
+    ...(datos.cedula ? ([["N° de cédula", datos.cedula]] as [string, string][]) : []),
+    ["Cargo", datos.puesto],
+    ["Motivo de baja", datos.tipoBajaLabel],
+    ["Fecha de ingreso", datos.fechaIngreso.toLocaleDateString("es-NI")],
+    ["Fecha de liquidación", datos.fechaBaja.toLocaleDateString("es-NI")],
+    ["Antigüedad", `${datos.antiguedadMeses} meses`],
+  ];
+  const filaAltoDatos = 20;
+  const cuadroTop = y;
+  const cuadroBottom = y - datosFilas.length * filaAltoDatos;
+  const colDatosValor = margin + 150;
+  page.drawRectangle({
+    x: tableLeft,
+    y: cuadroBottom,
+    width: tableRight - tableLeft,
+    height: cuadroTop - cuadroBottom,
+    borderColor: LINE,
+    borderWidth: 1,
+  });
+  vline(colDatosValor, cuadroTop, cuadroBottom);
+  datosFilas.forEach(([label, valor], i) => {
+    const yy = cuadroTop - i * filaAltoDatos - 14;
+    texto(label, margin + 8, yy, { size: 9, color: DIM });
+    texto(valor, colDatosValor + 8, yy, { size: 9, bold: true });
+    if (i > 0) hline(tableLeft, tableRight, cuadroTop - i * filaAltoDatos);
+  });
+  y = cuadroBottom - 24;
+
+  // ---------- Tabla de INGRESOS ----------
+  texto("INGRESOS", margin, y, { size: 10, bold: true, color: EMERALD });
+  y -= 16;
+
+  const colConcepto = margin;
+  const colMonto = tableRight - 140;
+  const filaAlto = 19;
+
+  const ingresoFilas: { concepto: string; monto: string; bold?: boolean }[] = [
+    { concepto: "Aguinaldo pendiente (exento)", monto: money(datos.aguinaldoPendiente, datos.moneda) },
+    { concepto: "Vacaciones pendientes (gravable)", monto: money(datos.vacacionesPendientes, datos.moneda) },
+    ...(datos.horasExtraCantidad > 0
+      ? [
+          {
+            concepto: `Horas extra pendientes · ${datos.horasExtraCantidad} hrs (gravable)`,
+            monto: money(datos.horasExtraMonto, datos.moneda),
+          },
+        ]
+      : []),
+    {
+      concepto: "Indemnización por antigüedad" + (datos.aplicaIndemnizacion ? " (exenta)" : ""),
+      monto: datos.aplicaIndemnizacion ? money(datos.indemnizacion, datos.moneda) : "No aplica",
     },
-  },
-  plugins: [],
-};
-export default config;
+    ...datos.pagosPendientes.map((p) => ({
+      concepto: `${p.concepto || "Pago pendiente"} (gravable)`,
+      monto: money(p.monto, datos.moneda),
+    })),
+    { concepto: "TOTAL INGRESOS", monto: money(datos.totalIngresos, datos.moneda), bold: true },
+  ];
+
+  const ingresosTop = y;
+  ingresoFilas.forEach((f, i) => {
+    const yy = ingresosTop - i * filaAlto - 13;
+    texto(f.concepto, colConcepto + 6, yy, { size: 9, bold: f.bold, color: f.bold ? INK : undefined });
+    textoDer(f.monto, tableRight - 6, yy, { size: 9, bold: f.bold });
+  });
+  const ingresosBottom = ingresosTop - ingresoFilas.length * filaAlto;
+  page.drawRectangle({
+    x: tableLeft,
+    y: ingresosBottom,
+    width: tableRight - tableLeft,
+    height: ingresosTop - ingresosBottom,
+    borderColor: LINE,
+    borderWidth: 1,
+  });
+  vline(colMonto, ingresosTop, ingresosBottom);
+  for (let i = 1; i <= ingresoFilas.length; i++) hline(tableLeft, tableRight, ingresosTop - i * filaAlto);
+  hline(tableLeft, tableRight, ingresosTop - (ingresoFilas.length - 1) * filaAlto, INK, 1);
+  y = ingresosBottom - 24;
+
+  // ---------- Tabla de DEDUCCIONES ----------
+  texto("DEDUCCIONES", margin, y, { size: 10, bold: true, color: GOLD });
+  y -= 16;
+
+  const deduccionFilas: { concepto: string; monto: string; bold?: boolean }[] = [
+    { concepto: "Seguro Social (INSS 7%)", monto: "- " + money(datos.gravableInss, datos.moneda) },
+    { concepto: "Impuesto sobre la renta (IR)", monto: "- " + money(datos.gravableIr, datos.moneda) },
+    { concepto: "TOTAL DEDUCCIONES", monto: "- " + money(round2(datos.gravableInss + datos.gravableIr), datos.moneda), bold: true },
+  ];
+  const deduccionesTop = y;
+  deduccionFilas.forEach((f, i) => {
+    const yy = deduccionesTop - i * filaAlto - 13;
+    texto(f.concepto, colConcepto + 6, yy, { size: 9, bold: f.bold });
+    textoDer(f.monto, tableRight - 6, yy, { size: 9, bold: f.bold });
+  });
+  const deduccionesBottom = deduccionesTop - deduccionFilas.length * filaAlto;
+  page.drawRectangle({
+    x: tableLeft,
+    y: deduccionesBottom,
+    width: tableRight - tableLeft,
+    height: deduccionesTop - deduccionesBottom,
+    borderColor: LINE,
+    borderWidth: 1,
+  });
+  vline(colMonto, deduccionesTop, deduccionesBottom);
+  for (let i = 1; i <= deduccionFilas.length; i++) hline(tableLeft, tableRight, deduccionesTop - i * filaAlto);
+  hline(tableLeft, tableRight, deduccionesTop - (deduccionFilas.length - 1) * filaAlto, INK, 1);
+  y = deduccionesBottom - 26;
+
+  // ---------- NETO A RECIBIR ----------
+  const netoAlto = 30;
+  page.drawRectangle({
+    x: tableLeft,
+    y: y - netoAlto,
+    width: tableRight - tableLeft,
+    height: netoAlto,
+    color: rgb(0.93, 0.96, 0.94),
+    borderColor: EMERALD,
+    borderWidth: 1,
+  });
+  texto("NETO A RECIBIR", colConcepto + 10, y - 20, { size: 11, bold: true, color: EMERALD });
+  textoDer(money(datos.total, datos.moneda), tableRight - 10, y - 20, { size: 13, bold: true, color: EMERALD });
+  y -= netoAlto + 28;
+
+  // ---------- Constancia y firmas ----------
+  textoMultilinea(
+    `Yo, ${datos.colaborador}, declaro haber recibido a mi entera satisfacción las prestaciones arriba descritas, a las cuales tenía derecho, y con las que doy por terminada totalmente mi relación laboral con ${datos.empresa.replace(/\.+$/, "")}. Declaro estar conforme con la presente liquidación y me comprometo a no presentar ningún reclamo posterior, ni personalmente ni por medio de representante, relacionado con dicha relación laboral.`,
+    margin,
+    tableRight - margin,
+    8,
+    DIM
+  );
+  y -= 36;
+
+  const firmaAncho = (tableRight - tableLeft - 40) / 2;
+  hline(margin, margin + firmaAncho, y);
+  hline(tableRight - firmaAncho, tableRight, y);
+  texto("Recibí conforme", margin, y - 12, { size: 8, color: DIM });
+  texto(datos.colaborador, margin, y - 24, { size: 8 });
+  texto("Autorizado por", tableRight - firmaAncho, y - 12, { size: 8, color: DIM });
+
+  return pdf.save();
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+const INK = rgb(0.11, 0.14, 0.15);
+const DIM = rgb(0.42, 0.47, 0.46);
+const GOLD = rgb(0.61, 0.48, 0.12);
+const EMERALD = rgb(0.18, 0.42, 0.34);
+const EMERALDDEEP = rgb(0.1647, 0.3608, 0.2941); // #2a5c4b — lóbulo trasero + tronco del ícono
+const EMERALDLIGHT = rgb(0.3725, 0.6824, 0.5608); // #5fae8f — lóbulo frontal del ícono
+const LINE = rgb(0.85, 0.85, 0.82);
+
+/**
+ * Ícono de marca de Ceiba (misma silueta que src/app/icon.svg y
+ * CeibaLogo.tsx: tronco + tres lóbulos de copa superpuestos + acento
+ * dorado), dibujado directamente como vector — no un PNG rasterizado — para
+ * que se vea nítido en cualquier zoom o impresión.
+ *
+ * Los paths usan el mismo viewBox 0-100 del SVG original. pdf-lib voltea el
+ * eje Y de un SVG internamente al dibujarlo (ver drawSvgPath en pdf-lib), así
+ * que (x, y) equivale a la esquina superior izquierda de ese viewBox en
+ * coordenadas de página, y `size` es el lado en puntos que ocupa el
+ * viewBox de 100×100 completo (las figuras reales quedan un poco más
+ * angostas, entre x≈10-92 / y≈40-94, como en el SVG).
+ */
+function dibujarLogoCeiba(page: PDFPage, x: number, y: number, size: number) {
+  const s = size / 100;
+  page.drawSvgPath("M45,94 L55,94 L52,62 L48,62 Z", { x, y, scale: s, color: EMERALDDEEP });
+  page.drawSvgPath("M10,66 C10,44 90,44 90,66 Z", { x, y, scale: s, color: EMERALDDEEP });
+  page.drawSvgPath("M12,66 C12,40 64,40 64,66 Z", { x, y, scale: s, color: EMERALD });
+  page.drawSvgPath("M46,66 C46,42 92,42 92,66 Z", { x, y, scale: s, color: EMERALDLIGHT });
+  page.drawCircle({ x: x + 58 * s, y: y - 47 * s, size: 4.2 * s, color: GOLD });
+}
+
+/**
+ * Preplanilla / planilla: un bloque por colaborador (identificación +
+ * detalle de "Concepto" con Asignación/Deducción), en vez de una sola fila
+ * por colaborador — tipo así lo hacen los reportes de nómina tradicionales.
+ * Formato carta vertical, para que cada bloque respire igual que en un
+ * comprobante impreso.
+ */
+export async function generarPDFPreplanilla(datos: DatosPreplanillaPDF): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  const pageWidth = PageSizes.Letter[0];
+  const pageHeight = PageSizes.Letter[1];
+  const margin = 46;
+  const tableLeft = margin;
+  const tableRight = pageWidth - margin;
+
+  // Bloque de identificación: dos columnas de pares etiqueta:valor.
+  const colLabelA = margin;
+  const colValA = margin + 70;
+  const colLabelB = margin + 260;
+  const colValB = margin + 330;
+
+  // Tabla de conceptos: Concepto | Cantidad | Asignación | Deducción.
+  const colConcepto = margin;
+  const colCantidadRight = margin + 300;
+  const colAsignacionRight = margin + 410;
+  const colDeduccionRight = tableRight;
+
+  let page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  function texto(t: string, x: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    page.drawText(t, { x, y: yy, size: opts.size ?? 9, font: opts.bold ? fontBold : font, color: opts.color ?? INK });
+  }
+  function textoDer(t: string, xRight: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    const size = opts.size ?? 9;
+    const f = opts.bold ? fontBold : font;
+    texto(t, xRight - f.widthOfTextAtSize(t, size), yy, opts);
+  }
+  function hline(x1: number, x2: number, yy: number, color = LINE, thickness = 0.75) {
+    page.drawLine({ start: { x: x1, y: yy }, end: { x: x2, y: yy }, thickness, color });
+  }
+
+  const esAguinaldo = datos.tipoPeriodo === "AGUINALDO";
+  const tituloEstado = esAguinaldo
+    ? (datos.estado === "BORRADOR" ? "PREPLANILLA DE AGUINALDO — NO VÁLIDO PARA PAGO" : "PLANILLA DE AGUINALDO APROBADA")
+    : (datos.estado === "BORRADOR" ? "PREPLANILLA — NO VÁLIDO PARA PAGO" : "PLANILLA APROBADA");
+  const colorEstado = datos.estado === "BORRADOR" ? GOLD : EMERALD;
+
+  function encabezadoCompleto() {
+    dibujarLogoCeiba(page, margin, y + 4, 20);
+    texto("CEIBA", margin + 24, y - 8, { size: 16, bold: true, color: EMERALD });
+    textoDer(`Generado: ${datos.generadoEl.toLocaleString("es-NI")}`, tableRight, y + 5, { size: 8, color: DIM });
+    y -= 27;
+    texto(tituloEstado, margin, y, { size: 12, bold: true, color: colorEstado });
+    if (datos.aprobadoEl) {
+      textoDer(`Aprobado: ${datos.aprobadoEl.toLocaleString("es-NI")}`, tableRight, y + 3, { size: 8, color: DIM });
+    }
+    y -= 18;
+    texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin, y, { size: 10, bold: true });
+    y -= 12;
+    hline(tableLeft, tableRight, y, INK, 1.2);
+    y -= 22;
+  }
+
+  function encabezadoContinuacion() {
+    dibujarLogoCeiba(page, margin, y + 8, 12);
+    texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin + 16, y, { size: 9, bold: true, color: DIM });
+    textoDer(tituloEstado, tableRight, y, { size: 8, bold: true, color: colorEstado });
+    y -= 10;
+    hline(tableLeft, tableRight, y);
+    y -= 20;
+  }
+
+  function nuevaPagina() {
+    page = pdf.addPage([pageWidth, pageHeight]);
+    y = pageHeight - margin;
+    encabezadoContinuacion();
+  }
+
+  encabezadoCompleto();
+
+  // Totales por moneda — un período normalmente es todo en córdobas, pero si
+  // incluye algún colaborador en dólares (ver Employee.moneda), nunca se
+  // suma directo con los de córdobas (ver src/lib/moneda.ts).
+  const totAsignacionItems: { moneda?: string | null; monto: number }[] = [];
+  const totDeduccionItems: { moneda?: string | null; monto: number }[] = [];
+  const totNetoItems: { moneda?: string | null; monto: number }[] = [];
+  let n = 0;
+
+  for (const f of datos.filas) {
+    n++;
+
+    // Conceptos que forman parte de esta liquidación de período (se omiten
+    // los que no aplican, para no llenar el comprobante de ceros).
+    type Concepto = { nombre: string; cantidad?: string; asignacion?: number; deduccion?: number };
+    const conceptos: Concepto[] = esAguinaldo
+      ? [{ nombre: "Aguinaldo (exento de INSS/IR — Art. 97 CT)", asignacion: f.bruto }]
+      : [{ nombre: "Salario base", asignacion: f.bruto }];
+    if (!esAguinaldo) {
+      if (f.horasExtraMonto > 0) {
+        conceptos.push({ nombre: "Horas extra", cantidad: `${f.horasExtraCantidad} h`, asignacion: f.horasExtraMonto });
+      }
+      if (f.comisiones > 0) conceptos.push({ nombre: "Comisiones", asignacion: f.comisiones });
+      if (f.retroactivos > 0) conceptos.push({ nombre: "Retroactivos", asignacion: f.retroactivos });
+      if (f.viaticos > 0) conceptos.push({ nombre: "Viáticos", asignacion: f.viaticos });
+      if (f.esServiciosProfesionales) {
+        conceptos.push({ nombre: "Retención servicios profesionales", cantidad: "10%", deduccion: f.ir });
+      } else {
+        conceptos.push({ nombre: "INSS laboral", cantidad: "7%", deduccion: f.inss });
+        conceptos.push({ nombre: "IR retenido", deduccion: f.ir });
+      }
+      if ((f.otrasDeducciones ?? 0) > 0) {
+        conceptos.push({ nombre: f.otrasDeduccionesConcepto || "Otras deducciones", deduccion: f.otrasDeducciones });
+      }
+    }
+
+    // Alto estimado del bloque completo, para decidir si cabe en lo que
+    // queda de página antes de empezar a dibujarlo.
+    const altoBloque = 58 + conceptos.length * 13 + 40;
+    if (y - altoBloque < margin + (datos.estado === "BORRADOR" ? 60 : 0)) nuevaPagina();
+
+    // ---------- Identificación del colaborador ----------
+    texto("Trabajador", colLabelA, y, { size: 8, color: DIM });
+    texto(f.codigo || String(n).padStart(3, "0"), colValA, y, { size: 9, bold: true });
+    texto("Cédula", colLabelB, y, { size: 8, color: DIM });
+    texto(f.cedula || "—", colValB, y, { size: 9 });
+    y -= 15;
+
+    texto("Nombre", colLabelA, y, { size: 8, color: DIM });
+    texto(f.nombre, colValA, y, { size: 10, bold: true });
+    texto("Ingreso", colLabelB, y, { size: 8, color: DIM });
+    texto(f.fechaIngreso ? new Date(f.fechaIngreso).toLocaleDateString("es-NI") : "—", colValB, y, { size: 9 });
+    y -= 15;
+
+    texto("Cargo", colLabelA, y, { size: 8, color: DIM });
+    texto(f.puesto, colValA, y, { size: 9 });
+    texto("Sueldo", colLabelB, y, { size: 8, color: DIM });
+    textoDer(money(f.bruto, f.moneda), tableRight, y, { size: 9, bold: true });
+    y -= 12;
+    hline(tableLeft, tableRight, y);
+    y -= 14;
+
+    // ---------- Tabla de conceptos ----------
+    texto("Concepto", colConcepto, y, { size: 7.5, bold: true, color: DIM });
+    textoDer("Cantidad", colCantidadRight, y, { size: 7.5, bold: true, color: DIM });
+    textoDer("Asignación", colAsignacionRight, y, { size: 7.5, bold: true, color: EMERALD });
+    textoDer("Deducción", colDeduccionRight, y, { size: 7.5, bold: true, color: GOLD });
+    y -= 5;
+    hline(tableLeft, tableRight, y);
+    y -= 13;
+
+    let subAsignacion = 0;
+    let subDeduccion = 0;
+    conceptos.forEach((c, i) => {
+      texto(`${i + 1}`, colConcepto, y, { size: 8, color: DIM });
+      texto(c.nombre, colConcepto + 16, y, { size: 8.5 });
+      if (c.cantidad) textoDer(c.cantidad, colCantidadRight, y, { size: 8, color: DIM });
+      if (c.asignacion !== undefined) {
+        textoDer(money(c.asignacion, f.moneda), colAsignacionRight, y, { size: 8.5 });
+        subAsignacion = round2(subAsignacion + c.asignacion);
+      }
+      if (c.deduccion !== undefined) {
+        textoDer(money(c.deduccion, f.moneda), colDeduccionRight, y, { size: 8.5 });
+        subDeduccion = round2(subDeduccion + c.deduccion);
+      }
+      y -= 13;
+    });
+
+    hline(colCantidadRight + 4, tableRight, y + 3);
+    y -= 2;
+    texto("Totales:", colConcepto + 16, y, { size: 8.5, bold: true });
+    textoDer(money(subAsignacion, f.moneda), colAsignacionRight, y, { size: 8.5, bold: true });
+    textoDer(money(subDeduccion, f.moneda), colDeduccionRight, y, { size: 8.5, bold: true });
+    y -= 15;
+
+    texto("Total neto del colaborador:", colConcepto + 16, y, { size: 9, bold: true, color: EMERALD });
+    textoDer(money(f.neto, f.moneda), tableRight, y, { size: 10, bold: true, color: EMERALD });
+    y -= 18;
+    hline(tableLeft, tableRight, y, LINE, 1.4);
+    y -= 22;
+
+    totAsignacionItems.push({ moneda: f.moneda, monto: subAsignacion });
+    totDeduccionItems.push({ moneda: f.moneda, monto: subDeduccion });
+    totNetoItems.push({ moneda: f.moneda, monto: f.neto });
+  }
+
+  // ---------- Totales del período ----------
+  if (y < margin + (datos.estado === "BORRADOR" ? 100 : 40)) nuevaPagina();
+  const etiquetaTotal = esAguinaldo
+    ? "AGUINALDO"
+    : (datos.estado === "BORRADOR" ? "PREPLANILLA" : "PLANILLA");
+  texto(`TOTAL ${etiquetaTotal} — ${datos.empresa}`, colConcepto, y, {
+    size: 9.5,
+    bold: true,
+  });
+  textoDer(`${n} colaborador${n === 1 ? "" : "es"}`, colCantidadRight, y, { size: 8, color: DIM });
+  textoDer(formatTotalPorMoneda(totAsignacionItems), colAsignacionRight, y, { size: 9.5, bold: true });
+  textoDer(formatTotalPorMoneda(totDeduccionItems), colDeduccionRight, y, { size: 9.5, bold: true });
+  y -= 16;
+  texto("Total neto del período:", colConcepto, y, { size: 9.5, bold: true, color: EMERALD });
+  textoDer(formatTotalPorMoneda(totNetoItems), tableRight, y, { size: 11, bold: true, color: EMERALD });
+  y -= 30;
+
+  if (datos.estado === "BORRADOR") {
+    if (y < margin + 60) nuevaPagina();
+    texto(
+      "Este documento es un borrador para revisión. Los montos no son definitivos hasta que el negocio los apruebe dentro de la plataforma.",
+      margin,
+      y,
+      { size: 8, color: DIM }
+    );
+    y -= 34;
+    texto("Aprobado por (nombre y firma): _______________________________", margin, y, { size: 9 });
+    texto("Fecha: ______________", tableRight - 140, y, { size: 9 });
+  }
+
+  return pdf.save();
+}
+
+export interface FilaListadoPago {
+  nombre: string;
+  cedula?: string | null;
+  cuentaBancaria?: string | null;
+  neto: number;
+  moneda?: string | null;
+}
+
+export interface DatosListadoPagoPDF {
+  empresa: string;
+  periodo: string;
+  estado: "BORRADOR" | "APROBADA";
+  generadoEl: Date;
+  filas: FilaListadoPago[];
+}
+
+/**
+ * Listado de pago: una tabla simple (N°, Nombre completo, N° Cédula, Cuenta
+ * bancaria, Neto a pagar) pensada para mandarla al banco o a quien haga las
+ * transferencias — no repite el desglose de ingresos/deducciones, que ya
+ * está en la preplanilla/planilla y en el comprobante individual.
+ */
+export async function generarPDFListadoPago(datos: DatosListadoPagoPDF): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  const pageWidth = PageSizes.Letter[0];
+  const pageHeight = PageSizes.Letter[1];
+  const margin = 46;
+  const tableLeft = margin;
+  const tableRight = pageWidth - margin;
+
+  // Columnas: N° | Nombre completo | N° Cédula | Cuenta bancaria | Neto a pagar
+  const colNRight = margin + 26;
+  const colNombre = margin + 34;
+  const colCedula = margin + 230;
+  const colCuenta = margin + 350;
+  const colNetoRight = tableRight;
+  const filaAlto = 20;
+
+  let page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  function texto(t: string, x: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    page.drawText(t, { x, y: yy, size: opts.size ?? 9, font: opts.bold ? fontBold : font, color: opts.color ?? INK });
+  }
+  function textoDer(t: string, xRight: number, yy: number, opts: { size?: number; bold?: boolean; color?: any } = {}) {
+    const size = opts.size ?? 9;
+    const f = opts.bold ? fontBold : font;
+    texto(t, xRight - f.widthOfTextAtSize(t, size), yy, opts);
+  }
+  function hline(x1: number, x2: number, yy: number, color = LINE, thickness = 0.75) {
+    page.drawLine({ start: { x: x1, y: yy }, end: { x: x2, y: yy }, thickness, color });
+  }
+  function vline(x: number, y1: number, y2: number, color = LINE, thickness = 0.75) {
+    page.drawLine({ start: { x, y: y1 }, end: { x, y: y2 }, thickness, color });
+  }
+
+  const tituloEstado = datos.estado === "BORRADOR" ? "BORRADOR — NO VÁLIDO PARA PAGO" : "PLANILLA APROBADA";
+  const colorEstado = datos.estado === "BORRADOR" ? GOLD : EMERALD;
+
+  function encabezado(primeraPagina: boolean) {
+    if (primeraPagina) {
+      dibujarLogoCeiba(page, margin, y + 4, 20);
+      texto("CEIBA", margin + 24, y - 8, { size: 16, bold: true, color: EMERALD });
+      textoDer(`Generado: ${datos.generadoEl.toLocaleString("es-NI")}`, tableRight, y + 5, { size: 8, color: DIM });
+      y -= 27;
+      texto("LISTADO DE PAGO", margin, y, { size: 12, bold: true, color: EMERALD });
+      textoDer(tituloEstado, tableRight, y + 2, { size: 8, bold: true, color: colorEstado });
+      y -= 18;
+      texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin, y, { size: 10, bold: true });
+      y -= 12;
+      hline(tableLeft, tableRight, y, INK, 1.2);
+      y -= 20;
+    } else {
+      dibujarLogoCeiba(page, margin, y + 8, 12);
+      texto(`${datos.empresa}  ·  Período: ${datos.periodo}`, margin + 16, y, { size: 9, bold: true, color: DIM });
+      textoDer(tituloEstado, tableRight, y, { size: 8, bold: true, color: colorEstado });
+      y -= 10;
+      hline(tableLeft, tableRight, y);
+      y -= 18;
+    }
+    texto("N°", margin + 4, y, { size: 8, bold: true, color: DIM });
+    texto("Nombre completo", colNombre, y, { size: 8, bold: true, color: DIM });
+    texto("N° Cédula", colCedula, y, { size: 8, bold: true, color: DIM });
+    texto("Cuenta bancaria", colCuenta, y, { size: 8, bold: true, color: DIM });
+    textoDer("Neto a pagar", colNetoRight, y, { size: 8, bold: true, color: DIM });
+    y -= 6;
+    hline(tableLeft, tableRight, y);
+    y -= filaAlto - 4;
+  }
+
+  function nuevaPagina() {
+    page = pdf.addPage([pageWidth, pageHeight]);
+    y = pageHeight - margin;
+    encabezado(false);
+  }
+
+  encabezado(true);
+
+  // Totales por moneda — ver comentario equivalente en generarPDFPreplanilla.
+  const totalNetoItems: { moneda?: string | null; monto: number }[] = [];
+  let n = 0;
+  const filaTopInicial = y + filaAlto - 4;
+  let filaTop = filaTopInicial;
+
+  for (const f of datos.filas) {
+    n++;
+    if (y - filaAlto < margin + 50) {
+      hline(tableLeft, tableRight, y + filaAlto - 4);
+      nuevaPagina();
+      filaTop = y + filaAlto - 4;
+    }
+
+    texto(String(n), margin + 4, y, { size: 8.5 });
+    texto(f.nombre, colNombre, y, { size: 8.5 });
+    texto(f.cedula || "—", colCedula, y, { size: 8.5 });
+    texto(f.cuentaBancaria || "—", colCuenta, y, { size: 8.5 });
+    textoDer(money(f.neto, f.moneda), colNetoRight, y, { size: 8.5, bold: true });
+    y -= filaAlto;
+    totalNetoItems.push({ moneda: f.moneda, monto: f.neto });
+  }
+
+  hline(tableLeft, tableRight, y + filaAlto - 4, INK, 1);
+  y -= 6;
+
+  if (y < margin + 40) nuevaPagina();
+  texto(`TOTAL — ${n} colaborador${n === 1 ? "" : "es"}`, colNombre, y, { size: 9.5, bold: true });
+  textoDer(formatTotalPorMoneda(totalNetoItems), colNetoRight, y, { size: 10.5, bold: true, color: EMERALD });
+
+  return pdf.save();
+}

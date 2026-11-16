@@ -19,6 +19,7 @@ const PERIODICIDAD_TAG: Record<string, string> = {
   QUINCENAL: "QUINCENAL",
   SEMANAL: "SEMANAL",
   SEMANAL_5: "SEMANAL · L-V",
+  SEMANAL_4: "SEMANAL · ÷4",
 };
 
 export default async function ColaboradoresPage() {
@@ -82,6 +83,7 @@ export default async function ColaboradoresPage() {
               <option value="QUINCENAL">Quincenal</option>
               <option value="SEMANAL">Semanal (7 días, incluye descanso pagado)</option>
               <option value="SEMANAL_5">Semanal — solo lunes a viernes (5 días)</option>
+              <option value="SEMANAL_4">Semanal — mes de 4 semanas exactas (÷4)</option>
             </select>
           </div>
           <Field name="grossSalary" label="Salario bruto" type="number" placeholder="9200" />
